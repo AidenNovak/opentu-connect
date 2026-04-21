@@ -55,6 +55,8 @@ const APP_VERSION =
   import.meta.env.VITE_APP_VERSION ||
   document.querySelector('meta[name="app-version"]')?.getAttribute('content') ||
   '0.0.0';
+const LAZY_CHUNK_RETRY_PARAM = '_lazy_chunk_retry';
+const LAZY_CHUNK_RETRY_TS_PARAM = '_t';
 
 type CDNName = 'jsdelivr' | 'unpkg' | 'local';
 
@@ -114,6 +116,28 @@ declare global {
     __OPENTU_BOOT__?: BootController;
   }
 }
+
+function cleanupLazyChunkRecoveryParams(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(LAZY_CHUNK_RETRY_PARAM)) {
+    return;
+  }
+
+  url.searchParams.delete(LAZY_CHUNK_RETRY_PARAM);
+  url.searchParams.delete(LAZY_CHUNK_RETRY_TS_PARAM);
+
+  try {
+    window.history.replaceState(window.history.state, '', url.toString());
+  } catch {
+    // ignore URL cleanup failures and continue booting
+  }
+}
+
+cleanupLazyChunkRecoveryParams();
 
 function isValidCDNName(value: unknown): value is CDNName {
   return value === 'jsdelivr' || value === 'unpkg' || value === 'local';

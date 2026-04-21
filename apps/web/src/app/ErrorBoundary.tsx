@@ -13,6 +13,102 @@ import { collectAndDownloadErrorLog } from '../utils/error-log-exporter';
 
 // ==================== Error Boundary ====================
 
+const LAZY_CHUNK_RETRY_KEY_PREFIX = 'aitu:lazy-chunk-retry';
+const LAZY_CHUNK_RETRY_PARAM = '_lazy_chunk_retry';
+const LAZY_CHUNK_RETRY_TS_PARAM = '_t';
+const DYNAMIC_IMPORT_ERROR_PATTERNS = [
+  /Failed to fetch dynamically imported module/i,
+  /Importing a module script failed/i,
+  /Loading chunk [\w-]+ failed/i,
+  /ChunkLoadError/i,
+];
+
+function getAppVersion(): string {
+  if (typeof document === 'undefined') {
+    return 'unknown';
+  }
+
+  return (
+    document.querySelector('meta[name="app-version"]')?.getAttribute('content') ||
+    'unknown'
+  );
+}
+
+function serializeError(error: unknown): string {
+  if (error instanceof Error) {
+    const parts = [error.name, error.message, error.stack];
+    if (error.cause) {
+      parts.push(String(error.cause));
+    }
+    return parts.filter(Boolean).join('\n');
+  }
+
+  return String(error ?? '');
+}
+
+function extractModuleKey(errorText: string): string {
+  const matchedUrl = errorText.match(/https?:\/\/[^\s)'"]+\.js(?:\?[^\s)'"]*)?/i);
+  if (!matchedUrl) {
+    return 'unknown-module';
+  }
+
+  try {
+    return new URL(matchedUrl[0]).pathname;
+  } catch {
+    return matchedUrl[0];
+  }
+}
+
+function isRecoverableDynamicImportError(error: unknown): boolean {
+  const errorText = serializeError(error);
+  return DYNAMIC_IMPORT_ERROR_PATTERNS.some((pattern) =>
+    pattern.test(errorText)
+  );
+}
+
+function tryRecoverDynamicImportError(error: unknown): boolean {
+  if (
+    typeof window === 'undefined' ||
+    typeof sessionStorage === 'undefined' ||
+    !isRecoverableDynamicImportError(error)
+  ) {
+    return false;
+  }
+
+  const errorText = serializeError(error);
+  const retryKey = `${LAZY_CHUNK_RETRY_KEY_PREFIX}:${getAppVersion()}:${extractModuleKey(
+    errorText
+  )}`;
+
+  try {
+    if (sessionStorage.getItem(retryKey) === '1') {
+      return false;
+    }
+
+    sessionStorage.setItem(retryKey, '1');
+  } catch {
+    return false;
+  }
+
+  const reloadUrl = new URL(window.location.href);
+  reloadUrl.searchParams.set(LAZY_CHUNK_RETRY_PARAM, '1');
+  reloadUrl.searchParams.set(
+    LAZY_CHUNK_RETRY_TS_PARAM,
+    String(Date.now())
+  );
+
+  console.warn(
+    '[ErrorBoundary] Detected stale lazy chunk. Reloading once to recover.',
+    error
+  );
+
+  window.setTimeout(() => {
+    window.location.replace(reloadUrl.toString());
+  }, 0);
+
+  return true;
+}
+
 interface Props {
   children: React.ReactNode;
 }
@@ -21,17 +117,29 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  recoveringFromChunkError: boolean;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false, error: null, errorInfo: null };
+  state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
+    recoveringFromChunkError: false,
+  };
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    this.setState({ errorInfo });
+    const recoveringFromChunkError = tryRecoverDynamicImportError(error);
+    this.setState({ errorInfo, recoveringFromChunkError });
+
+    if (recoveringFromChunkError) {
+      return;
+    }
+
     console.error('[ErrorBoundary] React render error:', error, errorInfo);
   }
 
@@ -39,6 +147,25 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!this.state.hasError) {
       return this.props.children;
     }
+
+    if (this.state.recoveringFromChunkError) {
+      return (
+        <ErrorFallbackUI
+          variant="error"
+          title="检测到静态资源已更新"
+          description="当前页面引用的懒加载资源已失效，正在自动刷新一次以恢复工作台。若长时间未恢复，可手动点击安全模式。"
+          errorMessage={this.state.error?.message || '动态资源加载失败'}
+          errorStack={this.state.error?.stack}
+          componentStack={this.state.errorInfo?.componentStack ?? undefined}
+          onExportLog={() =>
+            collectAndDownloadErrorLog(this.state.error, this.state.errorInfo)
+          }
+          onSafeModeReload={safeModeReload}
+          onGoToDebug={goToDebug}
+        />
+      );
+    }
+
     return (
       <ErrorFallbackUI
         variant="error"
