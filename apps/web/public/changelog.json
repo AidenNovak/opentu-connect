@@ -1,6 +1,21 @@
 {
   "versions": [
     {
+      "version": "0.6.41",
+      "date": "2026-04-21",
+      "changes": {
+        "features": [],
+        "fixes": [
+          "修复版本更新后懒加载 chunk 失效白屏"
+        ],
+        "improvements": [
+          "补充 PostHog 埋点复盘并收紧模型解析保护"
+        ]
+      },
+      "type": "patch",
+      "highlights": "修复版本更新后懒加载 chunk 失效白屏"
+    },
+    {
       "version": "0.6.40",
       "date": "2026-04-21",
       "changes": {

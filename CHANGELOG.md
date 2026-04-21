@@ -1,3 +1,18 @@
+## 0.6.41 (2026-04-21)
+
+### 🩹 Fixes
+
+- 修复版本更新后懒加载 chunk 失效白屏 ([03bda70c](https://github.com/ljquan/aitu/commit/03bda70c))
+
+### 🔧 Chores
+
+- 补充 PostHog 埋点复盘并收紧模型解析保护 ([cfdac73e](https://github.com/ljquan/aitu/commit/cfdac73e))
+- docs: 更新文档索引并补充PostHog监控与埋点改造复盘 ([b0b685c6](https://github.com/ljquan/aitu/commit/b0b685c6))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.6.40 (2026-04-21)
 
 ### 🚀 Features
