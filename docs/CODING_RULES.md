@@ -2324,6 +2324,42 @@ const restored =
 
 **原因**: 运行时模型发现后，同名模型可能来自不同供应商，参数能力并不完全相同。只按 `modelId` 记忆会让用户在切换供应商后看到错误回填，最终演变成隐蔽状态 bug。
 
+### 模型默认值与选择器排序的三层配置
+
+**场景**: 修改默认模型或调整模型选择器中的厂商/模型排序。
+
+**三层配置**:
+1. **`DEFAULT_*_MODEL_ID`**（`model-config.ts`）：代码级默认模型 ID，影响无用户设置时的兜底值
+2. **`DEFAULT_SETTINGS`**（`settings-manager.ts`）：设置面板"默认方案"的预设值，新用户首次看到的默认模型
+3. **`BUILT_IN_MODEL_RECOMMENDATION_SCORES`**（`model-config.ts`）：模型在选择器内的排序权重，分数越高排越前
+
+**厂商 Tab 排序**: 由 `DISCOVERY_VENDOR_ORDER`（`ModelVendorBrand.tsx`）控制，与模型数组顺序无关。
+
+**隐藏模型**: 不在选择器默认展示但保留参数定义的模型放入 `HIDDEN_VIDEO_MODELS`，`ALL_MODELS` 不包含它们，`getStaticModelConfig` 单独兜底查找。
+
+❌ **错误示例**:
+```typescript
+// 只改了常量，忘了改 settings-manager 的默认方案
+export const DEFAULT_VIDEO_MODEL_ID = 'seedance-1.5-pro';
+// settings-manager.ts 里仍然是 videoModelName: 'veo3.1'
+// → 设置面板"默认方案"显示旧模型
+
+// 只改了数组顺序，以为能影响选择器排序
+const BUILT_IN_VIDEO_MODELS = [kling, seedance, veo, ...];
+// → 实际排序由 recommendedScore 和 DISCOVERY_VENDOR_ORDER 决定
+```
+
+✅ **正确示例**:
+```typescript
+// 1. 改常量
+export const DEFAULT_VIDEO_MODEL_ID = 'seedance-1.5-pro';
+// 2. 同步改 settings-manager 默认方案
+const DEFAULT_SETTINGS = { gemini: { videoModelName: 'seedance-1.5-pro' } };
+// 3. 给模型加 recommendedScore 控制选择器内排序
+'seedance-1.5-pro': 97,
+// 4. 调整 DISCOVERY_VENDOR_ORDER 控制厂商 Tab 顺序
+```
+
 ### 中断任务延迟判定
 
 **场景**: 页面刷新后，`handleInterruptedTasks()` 处理仍处于 `processing` 状态的任务。如果图片生成通过 Fetch Relay 代理，SW 可能仍在执行 fetch（尚未完成），此时 `recoverFetchRelayResults()` 找不到结果。

@@ -80,117 +80,6 @@ export const VIDEO_MODEL_CONFIGS: Record<string, VideoModelConfig> = {
       labels: ['参考图'],
     },
   },
-  // Sora models
-  'sora-2': {
-    id: 'sora-2',
-    label: 'Sora 2',
-    provider: 'sora',
-    description: '10s/15s 默认标清，支持故事场景模式',
-    durationOptions: [
-      { label: '10秒', value: '10' },
-      { label: '15秒', value: '15' },
-    ],
-    defaultDuration: '10',
-    sizeOptions: [
-      { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
-      { label: '竖屏 9:16', value: '720x1280', aspectRatio: '9:16' },
-    ],
-    defaultSize: '1280x720',
-    imageUpload: {
-      maxCount: 1,
-      mode: 'reference',
-      labels: ['参考图'],
-    },
-    storyboardMode: {
-      supported: true,
-      maxScenes: 15,
-      minSceneDuration: 0.1,
-    },
-  },
-  'sora-2-pro': {
-    id: 'sora-2-pro',
-    label: 'Sora 2 Pro',
-    provider: 'sora',
-    description: '10s/15s/25s 高清，支持故事场景模式',
-    durationOptions: [
-      { label: '10秒', value: '10' },
-      { label: '15秒', value: '15' },
-      { label: '25秒', value: '25' },
-    ],
-    defaultDuration: '10',
-    sizeOptions: [
-      { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
-      { label: '竖屏 9:16', value: '720x1280', aspectRatio: '9:16' },
-      { label: '高清横屏', value: '1792x1024', aspectRatio: '16:9' },
-      { label: '高清竖屏', value: '1024x1792', aspectRatio: '9:16' },
-    ],
-    defaultSize: '1280x720',
-    imageUpload: {
-      maxCount: 1,
-      mode: 'reference',
-      labels: ['参考图'],
-    },
-    storyboardMode: {
-      supported: true,
-      maxScenes: 15,
-      minSceneDuration: 0.1,
-    },
-  },
-  'sora-2-4s': {
-    id: 'sora-2-4s',
-    label: 'Sora 2 · 4s',
-    provider: 'sora',
-    description: '4秒固定时长，模型名已包含时长，无需 seconds 参数',
-    durationOptions: [{ label: '4秒（固定）', value: '4' }],
-    defaultDuration: '4',
-    sizeOptions: [
-      { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
-      { label: '竖屏 9:16', value: '720x1280', aspectRatio: '9:16' },
-    ],
-    defaultSize: '1280x720',
-    imageUpload: {
-      maxCount: 1,
-      mode: 'reference',
-      labels: ['参考图'],
-    },
-  },
-  'sora-2-8s': {
-    id: 'sora-2-8s',
-    label: 'Sora 2 · 8s',
-    provider: 'sora',
-    description: '8秒固定时长，模型名已包含时长，无需 seconds 参数',
-    durationOptions: [{ label: '8秒（固定）', value: '8' }],
-    defaultDuration: '8',
-    sizeOptions: [
-      { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
-      { label: '竖屏 9:16', value: '720x1280', aspectRatio: '9:16' },
-    ],
-    defaultSize: '1280x720',
-    imageUpload: {
-      maxCount: 1,
-      mode: 'reference',
-      labels: ['参考图'],
-    },
-  },
-  'sora-2-12s': {
-    id: 'sora-2-12s',
-    label: 'Sora 2 · 12s',
-    provider: 'sora',
-    description: '12秒固定时长，模型名已包含时长，无需 seconds 参数',
-    durationOptions: [{ label: '12秒（固定）', value: '12' }],
-    defaultDuration: '12',
-    sizeOptions: [
-      { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
-      { label: '竖屏 9:16', value: '720x1280', aspectRatio: '9:16' },
-    ],
-    defaultSize: '1280x720',
-    imageUpload: {
-      maxCount: 1,
-      mode: 'reference',
-      labels: ['参考图'],
-    },
-  },
-
   // Veo models
   veo3: {
     id: 'veo3',
@@ -490,24 +379,6 @@ export const VIDEO_MODEL_CONFIGS: Record<string, VideoModelConfig> = {
       labels: ['参考图'],
     },
   },
-  'sora-2-15s': {
-    id: 'sora-2-15s',
-    label: 'Sora 2 · 15s',
-    provider: 'sora',
-    description: '15秒固定时长，模型名已包含时长，无需 seconds 参数',
-    durationOptions: [{ label: '15秒（固定）', value: '15' }],
-    defaultDuration: '15',
-    sizeOptions: [
-      { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
-      { label: '竖屏 9:16', value: '720x1280', aspectRatio: '9:16' },
-    ],
-    defaultSize: '1280x720',
-    imageUpload: {
-      maxCount: 1,
-      mode: 'reference',
-      labels: ['参考图'],
-    },
-  },
 };
 
 /**
@@ -517,7 +388,7 @@ export function normalizeVideoModel(model?: string | null): VideoModel {
   if (model) {
     return model;
   }
-  return 'veo3';
+  return 'seedance-1.5-pro';
 }
 
 function isStandardKlingVideoModel(modelId: string): boolean {

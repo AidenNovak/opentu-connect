@@ -224,9 +224,13 @@ const BUILT_IN_MODEL_RECOMMENDATION_SCORES: Readonly<Record<string, number>> = {
   'gemini-3-pro-image-preview-4k': 41,
 
   'kling_video': 98,
-  'veo3.1': 97,
-  'veo3-fast-frames': 96,
-  'veo3-pro': 95,
+  'seedance-1.5-pro': 97,
+  'seedance-1.0-pro': 96,
+  'seedance-1.0-pro-fast': 95,
+  'seedance-1.0-lite': 94,
+  'veo3.1': 93,
+  'veo3-fast-frames': 92,
+  'veo3-pro': 91,
   'veo3': 84,
   'veo3-fast': 83,
   'veo3.1-4k': 82,
@@ -712,7 +716,7 @@ const SEEDANCE_DEFAULT_PARAMS: VideoModelDefaults = {
 /**
  * 视频模型配置
  */
-export const VIDEO_MODELS: ModelConfig[] = applyBuiltInRecommendedScores([
+const BUILT_IN_VIDEO_MODELS: ModelConfig[] = [
   {
     id: 'kling_video',
     label: 'Kling',
@@ -724,6 +728,43 @@ export const VIDEO_MODELS: ModelConfig[] = applyBuiltInRecommendedScores([
     videoDefaults: KLING_DEFAULT_PARAMS,
   },
   {
+    id: 'seedance-1.5-pro',
+    label: 'Seedance 1.5 Pro',
+    shortCode: 'sc15p',
+    description: '即梦 1.5 Pro 有声视频，支持首尾帧',
+    type: 'video',
+    vendor: ModelVendor.DOUBAO,
+    isVip: true,
+    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'seedance-1.0-pro',
+    label: 'Seedance 1.0 Pro',
+    shortCode: 'sc10p',
+    description: '即梦 1.0 Pro，支持首尾帧',
+    type: 'video',
+    vendor: ModelVendor.DOUBAO,
+    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'seedance-1.0-pro-fast',
+    label: 'Seedance 1.0 Fast',
+    shortCode: 'sc10f',
+    description: '即梦 1.0 快速模式，仅首帧',
+    type: 'video',
+    vendor: ModelVendor.DOUBAO,
+    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'seedance-1.0-lite',
+    label: 'Seedance 1.0 Lite',
+    shortCode: 'sc10l',
+    description: '即梦 1.0 Lite，支持首尾帧和参考图',
+    type: 'video',
+    vendor: ModelVendor.DOUBAO,
+    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
+  },
+  {
     id: 'veo3.1',
     label: 'Veo 3.1',
     shortCode: 'v31',
@@ -733,62 +774,6 @@ export const VIDEO_MODELS: ModelConfig[] = applyBuiltInRecommendedScores([
     isVip: true,
     supportsTools: true,
     videoDefaults: VEO_DEFAULT_PARAMS,
-  },
-  {
-    id: 'sora-2',
-    label: 'Sora 2',
-    shortCode: 's2',
-    description: '10s/15s 默认标清，支持故事场景模式',
-    type: 'video',
-    vendor: ModelVendor.SORA,
-    isVip: true,
-    supportsTools: true,
-    videoDefaults: SORA_DEFAULT_PARAMS,
-  },
-  {
-    id: 'sora-2-4s',
-    label: 'Sora 2 · 4s',
-    shortCode: 's24',
-    description: '4秒固定时长，模型名已包含时长',
-    type: 'video',
-    vendor: ModelVendor.SORA,
-    isVip: true,
-    supportsTools: true,
-    videoDefaults: {
-      duration: '4',
-      size: '1280x720',
-      aspectRatio: '16:9',
-    },
-  },
-  {
-    id: 'sora-2-8s',
-    label: 'Sora 2 · 8s',
-    shortCode: 's28',
-    description: '8秒固定时长，模型名已包含时长',
-    type: 'video',
-    vendor: ModelVendor.SORA,
-    isVip: true,
-    supportsTools: true,
-    videoDefaults: {
-      duration: '8',
-      size: '1280x720',
-      aspectRatio: '16:9',
-    },
-  },
-  {
-    id: 'sora-2-12s',
-    label: 'Sora 2 · 12s',
-    shortCode: 's212',
-    description: '12秒固定时长，模型名已包含时长',
-    type: 'video',
-    vendor: ModelVendor.SORA,
-    isVip: true,
-    supportsTools: true,
-    videoDefaults: {
-      duration: '12',
-      size: '1280x720',
-      aspectRatio: '16:9',
-    },
   },
   {
     id: 'veo3',
@@ -861,53 +846,6 @@ export const VIDEO_MODELS: ModelConfig[] = applyBuiltInRecommendedScores([
     videoDefaults: VEO_4K_DEFAULT_PARAMS,
   },
   {
-    id: 'sora-2-pro',
-    label: 'Sora 2 Pro',
-    shortCode: 's2p',
-    description: '10s/15s/25s 高清，支持故事场景模式',
-    type: 'video',
-    vendor: ModelVendor.SORA,
-    supportsTools: true,
-    videoDefaults: SORA_DEFAULT_PARAMS,
-  },
-  {
-    id: 'seedance-1.5-pro',
-    label: 'Seedance 1.5 Pro',
-    shortCode: 'sc15p',
-    description: '即梦 1.5 Pro 有声视频，支持首尾帧',
-    type: 'video',
-    vendor: ModelVendor.DOUBAO,
-    isVip: true,
-    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
-  },
-  {
-    id: 'seedance-1.0-pro',
-    label: 'Seedance 1.0 Pro',
-    shortCode: 'sc10p',
-    description: '即梦 1.0 Pro，支持首尾帧',
-    type: 'video',
-    vendor: ModelVendor.DOUBAO,
-    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
-  },
-  {
-    id: 'seedance-1.0-pro-fast',
-    label: 'Seedance 1.0 Fast',
-    shortCode: 'sc10f',
-    description: '即梦 1.0 快速模式，仅首帧',
-    type: 'video',
-    vendor: ModelVendor.DOUBAO,
-    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
-  },
-  {
-    id: 'seedance-1.0-lite',
-    label: 'Seedance 1.0 Lite',
-    shortCode: 'sc10l',
-    description: '即梦 1.0 Lite，支持首尾帧和参考图',
-    type: 'video',
-    vendor: ModelVendor.DOUBAO,
-    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
-  },
-  {
     id: 'veo3-fast',
     label: 'Veo 3 Fast',
     shortCode: 'v3f',
@@ -969,6 +907,78 @@ export const VIDEO_MODELS: ModelConfig[] = applyBuiltInRecommendedScores([
     supportsTools: true,
     videoDefaults: KLING_DEFAULT_PARAMS,
   },
+];
+
+/**
+ * 隐藏/非内置视频模型（不在选择器显示，但保留参数定义支持自定义接入）
+ */
+const HIDDEN_VIDEO_MODELS: ModelConfig[] = [
+  {
+    id: 'sora-2',
+    label: 'Sora 2',
+    shortCode: 's2',
+    description: '10s/15s 默认标清，支持故事场景模式',
+    type: 'video',
+    vendor: ModelVendor.SORA,
+    isVip: true,
+    supportsTools: true,
+    videoDefaults: SORA_DEFAULT_PARAMS,
+  },
+  {
+    id: 'sora-2-4s',
+    label: 'Sora 2 · 4s',
+    shortCode: 's24',
+    description: '4秒固定时长，模型名已包含时长',
+    type: 'video',
+    vendor: ModelVendor.SORA,
+    isVip: true,
+    supportsTools: true,
+    videoDefaults: {
+      duration: '4',
+      size: '1280x720',
+      aspectRatio: '16:9',
+    },
+  },
+  {
+    id: 'sora-2-8s',
+    label: 'Sora 2 · 8s',
+    shortCode: 's28',
+    description: '8秒固定时长，模型名已包含时长',
+    type: 'video',
+    vendor: ModelVendor.SORA,
+    isVip: true,
+    supportsTools: true,
+    videoDefaults: {
+      duration: '8',
+      size: '1280x720',
+      aspectRatio: '16:9',
+    },
+  },
+  {
+    id: 'sora-2-12s',
+    label: 'Sora 2 · 12s',
+    shortCode: 's212',
+    description: '12秒固定时长，模型名已包含时长',
+    type: 'video',
+    vendor: ModelVendor.SORA,
+    isVip: true,
+    supportsTools: true,
+    videoDefaults: {
+      duration: '12',
+      size: '1280x720',
+      aspectRatio: '16:9',
+    },
+  },
+  {
+    id: 'sora-2-pro',
+    label: 'Sora 2 Pro',
+    shortCode: 's2p',
+    description: '10s/15s/25s 高清，支持故事场景模式',
+    type: 'video',
+    vendor: ModelVendor.SORA,
+    supportsTools: true,
+    videoDefaults: SORA_DEFAULT_PARAMS,
+  },
   {
     id: 'sora-2-15s',
     label: 'Sora 2 · 15s',
@@ -983,6 +993,10 @@ export const VIDEO_MODELS: ModelConfig[] = applyBuiltInRecommendedScores([
       aspectRatio: '16:9',
     },
   },
+];
+
+export const VIDEO_MODELS: ModelConfig[] = applyBuiltInRecommendedScores([
+  ...BUILT_IN_VIDEO_MODELS,
 ]);
 
 // ============================================
@@ -1304,7 +1318,8 @@ export function getStaticModelsByType(type: ModelType): ModelConfig[] {
 }
 
 export function getStaticModelConfig(modelId: string): ModelConfig | undefined {
-  return ALL_MODELS.find((model) => model.id === modelId);
+  return ALL_MODELS.find((model) => model.id === modelId)
+    || HIDDEN_VIDEO_MODELS.find((model) => model.id === modelId);
 }
 
 // ============================================
@@ -1467,7 +1482,7 @@ export const AUDIO_MODEL_SELECT_OPTIONS = AUDIO_MODELS.map((model) => ({
 /**
  * 默认图片模型 ID
  */
-export const DEFAULT_IMAGE_MODEL_ID = 'gpt-image-2';
+export const DEFAULT_IMAGE_MODEL_ID = 'gpt-image-2-vip';
 
 /**
  * 获取默认图片模型 ID（优先使用环境变量）
@@ -1483,7 +1498,7 @@ export function getDefaultImageModel(): string {
 /**
  * 默认视频模型 ID
  */
-export const DEFAULT_VIDEO_MODEL_ID = 'veo3';
+export const DEFAULT_VIDEO_MODEL_ID = 'seedance-1.5-pro';
 
 /**
  * 获取默认视频模型 ID（目前固定为 veo3）
@@ -1545,7 +1560,7 @@ const VEO_MODEL_IDS = [
 /** Veo 4K 系列模型 ID（4K分辨率，只支持 8 秒） */
 const VEO_4K_MODEL_IDS = ['veo3.1-4k', 'veo3.1-components-4k', 'veo3.1-pro-4k'];
 
-/** 所有 Veo 模型 ID（用于时长参数） */
+/** All Veo模型 ID（用于时长参数） */
 const ALL_VEO_MODEL_IDS = [...VEO_MODEL_IDS, ...VEO_4K_MODEL_IDS];
 
 /** Sora 2 模型（支持 10/15 秒） */
