@@ -1,3 +1,14 @@
+## 0.6.42 (2026-04-21)
+
+### 🔧 Chores
+
+- 更新版本号至0.6.41并修复错误处理 ([5d4b4758](https://github.com/ljquan/aitu/commit/5d4b4758))
+- refactor: 调整视频模型默认配置与选择器排序 ([6d8397d0](https://github.com/ljquan/aitu/commit/6d8397d0))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.6.41 (2026-04-21)
 
 ### 🩹 Fixes
