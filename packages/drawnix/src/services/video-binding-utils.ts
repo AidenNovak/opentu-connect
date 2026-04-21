@@ -326,9 +326,7 @@ export function getEffectiveVideoCompatibleParams(
   params?: Record<string, unknown> | null
 ): ParamConfig[] {
   const compatibleParams = getCompatibleParams(modelId);
-  const durationParam = compatibleParams.find((param) => param.id === 'duration');
   const plan = resolveInvocationPlanFromRoute('video', modelRef || modelId);
-  const soraMode = resolveSoraMode(modelId, plan?.binding || null, params);
   const metadata = getResolvedVideoBindingMetadata(modelId, plan?.binding || null, params);
   const selectedKlingAction = resolveSelectedKlingAction(params);
   const effectiveConfig = getEffectiveVideoModelConfigForSelection(
@@ -350,13 +348,6 @@ export function getEffectiveVideoCompatibleParams(
       return true;
     })
     .map((param) => {
-    if (param.id === SORA_MODE_PARAM_ID && soraMode) {
-      return {
-        ...param,
-        defaultValue: soraMode,
-      };
-    }
-
     if (
       plan?.binding?.protocol === 'kling.video' &&
       metadata?.versionField === param.id &&

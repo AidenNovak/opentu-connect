@@ -1,6 +1,6 @@
 {
   "version": "0.6.41",
-  "buildTime": "2026-04-21T10:24:20.047Z",
+  "buildTime": "2026-04-21T10:28:59.235Z",
   "gitCommit": "unknown",
   "changelog": [
     "修复版本更新后懒加载 chunk 失效白屏"

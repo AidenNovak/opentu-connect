@@ -30,7 +30,7 @@ export interface BatchVideoReferenceResult {
  *   - referenceImages = [首帧, 尾帧]（固定，角色参考图无法放入）
  *   - unusedCharacterReferenceUrls = characterReferenceUrls（供调用方注入 prompt）
  *
- * 其它模式（Kling/Sora 等）：
+ * 其它模式（Kling 等）：
  *   - referenceImages = [角色参考图..., 首帧, ...extras]（角色参考图优先）
  *   - unusedCharacterReferenceUrls = undefined
  */

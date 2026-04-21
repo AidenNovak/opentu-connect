@@ -37,8 +37,8 @@ function getAppVersion(): string {
 function serializeError(error: unknown): string {
   if (error instanceof Error) {
     const parts = [error.name, error.message, error.stack];
-    if (error.cause) {
-      parts.push(String(error.cause));
+    if ((error as any).cause) {
+      parts.push(String((error as any).cause));
     }
     return parts.filter(Boolean).join('\n');
   }
