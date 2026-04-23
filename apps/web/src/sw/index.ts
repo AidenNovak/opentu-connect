@@ -1073,6 +1073,8 @@ let lastObservedClientFetchAt = 0;
 const completedIdlePrefetchEntries = new Set<string>();
 const activeIdlePrefetchEntries = new Set<string>();
 const completedIdlePrefetchGroups = new Set<string>();
+let installingVersionIsUpdate = false;
+let shouldClaimClientsOnActivate = false;
 
 function logSWDebug(message: string, detail?: unknown): void {
   if (detail === undefined) {
@@ -1638,10 +1640,14 @@ async function prefetchDefaultIdleGroups(): Promise<void> {
 
 sw.addEventListener('install', (event: ExtendableEvent) => {
   logSWDebug('install event received', { version: APP_VERSION });
-  // 立即 skipWaiting，不等待 precache 完成
-  // 这样 SW 可以尽快进入 activate → claim，拦截后续的 JS/CSS 请求
-  // precache 在后台继续执行，cache miss 时走 CDN 回退
-  sw.skipWaiting();
+  installingVersionIsUpdate = Boolean(sw.registration.active);
+  shouldClaimClientsOnActivate = !installingVersionIsUpdate;
+
+  // 首次安装：允许尽快接管页面，提升新用户首次访问的缓存命中率。
+  // 版本更新：保持 waiting，不打断当前正在运行的旧版本，等后台整包准备完成后再提示升级。
+  if (!installingVersionIsUpdate) {
+    sw.skipWaiting();
+  }
 
   setSWBootProgress({
     phase: 'installing',
@@ -1671,6 +1677,9 @@ sw.addEventListener('install', (event: ExtendableEvent) => {
             message: '开发模式下跳过静态预缓存',
           });
         }
+
+        // 更新场景下，直到整包资源写入成功后才通知主线程可以提示升级。
+        markNewVersionReady(installingVersionIsUpdate);
       } catch (err) {
         setSWBootProgress({
           phase: 'error',
@@ -1691,8 +1700,6 @@ sw.addEventListener('activate', (event: ExtendableEvent) => {
     message: '启动缓存服务正在接管页面...',
   });
 
-  // 立即接管所有页面，不等待缓存清理
-  // 这样可以确保 SW 尽快生效，拦截后续请求（如下载失败的 JS/CSS）
   event.waitUntil(
     (async () => {
       // 预热 CDN 偏好，后续静态资源请求可以直接复用
@@ -1703,9 +1710,14 @@ sw.addEventListener('activate', (event: ExtendableEvent) => {
       } catch (error) {
         console.warn('Failed to load persisted CDN preference:', error);
       }
-      logSWDebug('activate: before clients.claim');
-      await sw.clients.claim();
-      logSWDebug('activate: after clients.claim');
+
+      if (shouldClaimClientsOnActivate) {
+        logSWDebug('activate: before clients.claim');
+        await sw.clients.claim();
+        logSWDebug('activate: after clients.claim');
+      } else {
+        logSWDebug('activate: skip clients.claim for staged update');
+      }
 
       // 激活后自动消费 idle-prefetch manifest 的默认分组。
       // prefetchIdleGroups 会在最近有客户端请求时自动延后，避免抢占首屏。
@@ -2040,6 +2052,7 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
     // 主线程请求立即升级（用户主动触发）
     // console.log('Service Worker: 收到主线程的 SKIP_WAITING 请求');
 
+    shouldClaimClientsOnActivate = true;
     // 直接调用 skipWaiting
     sw.skipWaiting();
 
@@ -2050,6 +2063,7 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
     }
   } else if (event.data && event.data.type === 'FORCE_UPGRADE') {
     // 主线程强制升级
+    shouldClaimClientsOnActivate = true;
     sw.skipWaiting();
 
     // 使用 channelManager 通知客户端 SW 已更新

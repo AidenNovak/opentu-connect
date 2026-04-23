@@ -368,8 +368,6 @@ if ('serviceWorker' in navigator) {
     window.location.hostname === 'localhost' ||
     window.location.hostname === '127.0.0.1';
 
-  // 新版本是否已准备好
-  let newVersionReady = false;
   // 等待中的新 Worker
   let pendingWorker: ServiceWorker | null = null;
   // 用户是否已确认升级（只有用户确认后才触发刷新）
@@ -377,6 +375,14 @@ if ('serviceWorker' in navigator) {
 
   // Global reference to service worker registration
   let swRegistration: ServiceWorkerRegistration | null = null;
+
+  const notifyUpdateReady = (version: string) => {
+    window.dispatchEvent(
+      new CustomEvent('sw-update-available', {
+        detail: { version },
+      })
+    );
+  };
 
   const swRegistrationPromise =
     window.__OPENTU_SW_REGISTRATION_PROMISE__ ||
@@ -415,6 +421,16 @@ if ('serviceWorker' in navigator) {
         if (registration.waiting) {
           registration.waiting.postMessage({ type: 'SKIP_WAITING' });
         }
+      } else if (registration.waiting && navigator.serviceWorker.controller) {
+        pendingWorker = registration.waiting;
+        fetch(`/version.json?t=${Date.now()}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            notifyUpdateReady(data?.version || 'new');
+          })
+          .catch(() => {
+            notifyUpdateReady('new');
+          });
       }
 
       // 监听Service Worker更新
@@ -431,26 +447,6 @@ if ('serviceWorker' in navigator) {
               // 在开发模式下自动激活新的Service Worker
               if (isDevelopment) {
                 newWorker.postMessage({ type: 'SKIP_WAITING' });
-              } else {
-                // 生产模式：新版本已安装，通知 UI 显示升级提示
-                newVersionReady = true;
-                // 尝试获取新版本号，用于更新提示
-                fetch(`/version.json?t=${Date.now()}`)
-                  .then((res) => (res.ok ? res.json() : null))
-                  .then((data) => {
-                    window.dispatchEvent(
-                      new CustomEvent('sw-update-available', {
-                        detail: { version: data?.version || 'new' },
-                      })
-                    );
-                  })
-                  .catch(() => {
-                    window.dispatchEvent(
-                      new CustomEvent('sw-update-available', {
-                        detail: { version: 'new' },
-                      })
-                    );
-                  });
               }
             }
           });
@@ -486,7 +482,7 @@ if ('serviceWorker' in navigator) {
     }
 
     swChannelClient.setEventHandlers({
-      onSWUpdated: (event) => {
+      onSWUpdated: (_event) => {
         // 只有用户主动确认升级后才刷新页面
         if (!userConfirmedUpgrade) {
           return;
@@ -497,22 +493,30 @@ if ('serviceWorker' in navigator) {
         }, 1000);
       },
       onSWNewVersionReady: (event) => {
-        newVersionReady = true;
-        window.dispatchEvent(
-          new CustomEvent('sw-update-available', {
-            detail: { version: event.version },
-          })
-        );
+        notifyUpdateReady(event.version);
       },
-      onSWActivated: (event) => {
-        // 新 SW 已自动激活并接管页面
-        window.dispatchEvent(
-          new CustomEvent('sw-update-available', {
-            detail: { version: event.version, autoActivated: true },
-          })
-        );
+      onSWActivated: (_event) => {
+        if (userConfirmedUpgrade) {
+          return;
+        }
+
+        // 老版本页面关闭后，waiting worker 可能在后台自然转为 active。
+        // 这时不再重复弹升级提示，只更新运行时状态。
+        pendingWorker = null;
       },
     });
+
+    if (swRegistration?.waiting && navigator.serviceWorker.controller) {
+      pendingWorker = swRegistration.waiting;
+      fetch(`/version.json?t=${Date.now()}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          notifyUpdateReady(data?.version || 'new');
+        })
+        .catch(() => {
+          notifyUpdateReady('new');
+        });
+    }
   };
 
   // 延迟初始化 SW 事件处理器，等待 swChannelClient 就绪
