@@ -1,3 +1,17 @@
+## 0.6.56 (2026-04-23)
+
+### 🩹 Fixes
+
+- 将 SW 升级切换改为整包 ready 后再接管 ([6c482936](https://github.com/ljquan/aitu/commit/6c482936))
+
+### 🔧 Chores
+
+- 更新版本号至0.6.55并刷新构建时间 ([7610ed5e](https://github.com/ljquan/aitu/commit/7610ed5e))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.6.55 (2026-04-23)
 
 ### 🔧 Chores
