@@ -1,8 +1,6 @@
 {
-  "version": "0.6.54",
-  "buildTime": "2026-04-22T14:55:09.974Z",
+  "version": "0.6.55",
+  "buildTime": "2026-04-23T00:58:08.619Z",
   "gitCommit": "unknown",
-  "changelog": [
-    "修正首屏资源 CDN 回退路径归一化"
-  ]
+  "changelog": []
 }

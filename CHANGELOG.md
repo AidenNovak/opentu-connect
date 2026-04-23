@@ -1,3 +1,15 @@
+## 0.6.55 (2026-04-23)
+
+### 🔧 Chores
+
+- refactor(service-worker): 移除未使用的SW启动进度查询逻辑 ([406f021f](https://github.com/ljquan/aitu/commit/406f021f))
+- docs: 沉淀旧入口与悬空 hash 资源经验 ([150371c6](https://github.com/ljquan/aitu/commit/150371c6))
+- docs: 沉淀首屏 CDN 回退与加载自愈经验 ([85ed2213](https://github.com/ljquan/aitu/commit/85ed2213))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.6.54 (2026-04-22)
 
 ### 🩹 Fixes

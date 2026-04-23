@@ -1,6 +1,12 @@
 {
   "versions": [
     {
+      "version": "0.6.55",
+      "date": "2026-04-23",
+      "type": "patch",
+      "highlights": "构建修复与稳定性改进"
+    },
+    {
       "version": "0.6.54",
       "date": "2026-04-22",
       "changes": {
