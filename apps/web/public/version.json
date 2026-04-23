@@ -1,8 +1,6 @@
 {
-  "version": "0.6.57",
-  "buildTime": "2026-04-23T01:48:01.209Z",
+  "version": "0.6.58",
+  "buildTime": "2026-04-23T02:47:44.525Z",
   "gitCommit": "unknown",
-  "changelog": [
-    "老用户沿用旧版壳并修正图层锁定失效路径"
-  ]
+  "changelog": []
 }
