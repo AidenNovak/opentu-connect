@@ -4227,15 +4227,51 @@ async function handleStaticRequest(request: Request): Promise<Response> {
   // Production Mode: Optimized strategies
   // ===========================================
 
-  // Strategy 1: HTML/Navigation - Network First with fast fallback
+  // Strategy 1: HTML/Navigation - Cache first for already-controlled clients.
+  // This keeps existing users on the old shell while the new worker prewarms
+  // its own versioned cache in the background, and only switches after the
+  // user explicitly confirms the upgrade.
   if (isHtmlRequest) {
+    let cachedResponse = await cache.match(request);
+
+    if (!cachedResponse) {
+      cachedResponse = await cache.match('/');
+    }
+    if (!cachedResponse) {
+      cachedResponse = await cache.match('/index.html');
+    }
+
+    if (!cachedResponse) {
+      const allCacheNames = await caches.keys();
+      for (const cacheName of allCacheNames) {
+        if (cacheName.startsWith('drawnix-static-v')) {
+          try {
+            const oldCache = await caches.open(cacheName);
+            cachedResponse =
+              (await oldCache.match(request)) ||
+              (await oldCache.match('/')) ||
+              (await oldCache.match('/index.html'));
+            if (cachedResponse) {
+              break;
+            }
+          } catch {
+            // Ignore broken legacy caches and continue fallback lookup.
+          }
+        }
+      }
+    }
+
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+
     try {
-      // Try network first (no retries for connection errors - fail fast)
+      // No cached shell available (typically first visit), fetch from network.
       const response = await fetchQuick(request, {
         cache: 'reload' as RequestCache,
       });
 
-      // Cache successful responses
+      // Cache successful responses for future staged upgrades.
       if (
         response &&
         response.status === 200 &&
@@ -4245,88 +4281,8 @@ async function handleStaticRequest(request: Request): Promise<Response> {
         return response;
       }
 
-      // If server returns error response (4xx, 5xx), try cache first
-      if (!response.ok) {
-        // console.warn(`Service Worker: Server returned ${response.status} for ${request.url}, trying cache`);
-        let cachedResponse = await cache.match(request);
-
-        // For SPA, any route should fall back to index.html
-        if (!cachedResponse) {
-          cachedResponse = await cache.match('/');
-        }
-        if (!cachedResponse) {
-          cachedResponse = await cache.match('/index.html');
-        }
-
-        // If not in current cache, try older static caches
-        if (!cachedResponse) {
-          const allCacheNames = await caches.keys();
-          for (const cacheName of allCacheNames) {
-            if (cacheName.startsWith('drawnix-static-v')) {
-              try {
-                const oldCache = await caches.open(cacheName);
-                cachedResponse =
-                  (await oldCache.match(request)) ||
-                  (await oldCache.match('/')) ||
-                  (await oldCache.match('/index.html'));
-                if (cachedResponse) {
-                  // console.log(`Service Worker: Found navigation fallback in ${cacheName}`);
-                  break;
-                }
-              } catch (e) {
-                // Ignore
-              }
-            }
-          }
-        }
-
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-
-        // No cache available, return the error response
-        return response;
-      }
-
       return response;
-    } catch (networkError) {
-      // Network failed - immediately try cache (no waiting)
-      let cachedResponse = await cache.match(request);
-
-      // For SPA, any route should fall back to index.html
-      if (!cachedResponse) {
-        cachedResponse = await cache.match('/');
-      }
-      if (!cachedResponse) {
-        cachedResponse = await cache.match('/index.html');
-      }
-
-      // If not in current cache, try older static caches
-      if (!cachedResponse) {
-        const allCacheNames = await caches.keys();
-        for (const cacheName of allCacheNames) {
-          if (cacheName.startsWith('drawnix-static-v')) {
-            try {
-              const oldCache = await caches.open(cacheName);
-              cachedResponse =
-                (await oldCache.match(request)) ||
-                (await oldCache.match('/')) ||
-                (await oldCache.match('/index.html'));
-              if (cachedResponse) {
-                // console.log(`Service Worker: Found navigation fallback in ${cacheName} after network failure`);
-                break;
-              }
-            } catch (e) {
-              // Ignore
-            }
-          }
-        }
-      }
-
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-
+    } catch {
       // No cache - return offline page
       return createOfflinePage();
     }

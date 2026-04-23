@@ -546,7 +546,14 @@ export const LayerPanel: React.FC = () => {
         return next;
       });
 
-      Transforms.setNode(board, { locked: willLock } as any, [item.index]);
+      const currentIndex = (board.children as PlaitElement[]).findIndex(
+        (child) => child.id === id
+      );
+      if (currentIndex < 0) {
+        return;
+      }
+
+      Transforms.setNode(board, { locked: willLock } as any, [currentIndex]);
     },
     [board, lockedIds]
   );
