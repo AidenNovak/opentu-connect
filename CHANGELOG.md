@@ -1,3 +1,17 @@
+## 0.6.57 (2026-04-23)
+
+### 🩹 Fixes
+
+- 老用户沿用旧版壳并修正图层锁定失效路径 ([2aed8ef9](https://github.com/ljquan/aitu/commit/2aed8ef9))
+
+### 🔧 Chores
+
+- 更新应用版本至0.6.56并同步构建时间 ([90210e78](https://github.com/ljquan/aitu/commit/90210e78))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.6.56 (2026-04-23)
 
 ### 🩹 Fixes

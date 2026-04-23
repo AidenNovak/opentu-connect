@@ -1,8 +1,8 @@
 {
-  "version": "0.6.56",
-  "buildTime": "2026-04-23T01:31:25.748Z",
+  "version": "0.6.57",
+  "buildTime": "2026-04-23T01:48:01.209Z",
   "gitCommit": "unknown",
   "changelog": [
-    "将 SW 升级切换改为整包 ready 后再接管"
+    "老用户沿用旧版壳并修正图层锁定失效路径"
   ]
 }
