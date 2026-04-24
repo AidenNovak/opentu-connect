@@ -682,3 +682,105 @@
 - **页面 ready 只代表壳子 ready，不代表离线工作集 ready**
 - **离线完整性要盯整个静态依赖面，而不只盯懒加载 JS**
 - **SW 预取分组名一旦进入消息协议，就必须当作发布契约来维护**
+
+---
+
+## 补充经验：真实静态 HTML 不能走 App Shell 回退（2026-04-24）
+
+### 现象
+
+线上访问这类 URL 时：
+
+- `/user-manual/index.html?board=...`
+- `/user-manual/advanced-settings.html`
+
+页面会返回首页或手册首页的 HTML，导致目标静态页面不可用。
+
+### 这次真正踩中的根因
+
+#### 1. 把任意 `.html` 都当成 App Shell，是错误建模
+
+这次 SW 里曾使用类似判定：
+
+- `request.mode === 'navigate'`
+- 或 `pathname.endsWith('.html')`
+
+这会把两类请求混在一起：
+
+- SPA 导航请求
+- 真实存在的静态 HTML 文档
+
+像 `/user-manual/index.html` 这类页面虽然名字叫 `index.html`，本质仍是目录下的真实静态文档，不是站点根壳。
+
+#### 2. 根壳双 key 镜像不能扩散到子目录 `index.html`
+
+之前为了让首页导航更快命中缓存，会把：
+
+- `/`
+- `/index.html`
+
+做双 key 映射。
+
+但如果判断写成：
+
+- `pathname.endsWith('/index.html')`
+
+就会把 `/user-manual/index.html` 也误纳入根壳镜像范围，带来缓存串页风险。
+
+### 这次应固化的规则
+
+#### 1. App Shell 只允许覆盖根壳页
+
+应该只把下面两类请求视为根壳：
+
+- `/`
+- `/index.html`
+
+以及：
+
+- **无扩展名** 的 SPA 导航路径（如 `/workspace/abc`）
+
+下面这些都必须按真实文档处理，不能回退首页：
+
+- `/user-manual/index.html`
+- `/foo/bar/index.html`
+- `/advanced-settings.html`
+
+#### 2. 根壳 alias 只允许 `/` 和 `/index.html`
+
+`/` 与 `/index.html` 的双 key 缓存规则，只能作用于站点根壳本身。  
+不要把“任何以 `/index.html` 结尾的路径”都视为可镜像入口。
+
+#### 3. 这类逻辑必须拆成独立 helper，并补定向单测
+
+比起把判断散落在 `handleStaticRequest` 里，更稳的做法是：
+
+- 单独抽出 app-shell 路由判定 helper
+- 明确测试：
+  - `/`
+  - `/index.html`
+  - `/workspace/abc`
+  - `/user-manual/index.html`
+  - `/advanced-settings.html`
+
+这样以后再改 SW 缓存策略时，不容易把静态文档重新带坏。
+
+### 这次排查里一个很值钱的动作
+
+当发现“某个 HTML 页面返回了首页内容”时，第一步不要先认定是 SW。
+
+应先直接请求线上 URL，确认：
+
+- 源站本身返回的是目标页面
+- 还是源站已经先 rewrite 成首页
+
+这一步能快速把问题分成两类：
+
+- 部署层 rewrite 错误
+- SW 缓存 / fallback 错误
+
+### 一句话总结
+
+- **显式 `.html` 文档不是天然的 App Shell**
+- **根壳缓存优化只能服务根壳，不能泛化到所有 `index.html`**
+- **先区分源站直出错误还是 SW 拦截错误，再动修复**

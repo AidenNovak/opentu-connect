@@ -35,6 +35,10 @@ import {
   setCDNPreference,
 } from './cdn-fallback';
 import { getSafeErrorMessage } from './task-queue/utils/sanitize-utils';
+import {
+  shouldMirrorToAppShellAliases,
+  shouldUseAppShellStrategy,
+} from './app-shell-routing';
 
 // fix: self redeclaration error and type casting
 const sw = self as unknown as ServiceWorkerGlobalScope;
@@ -1441,8 +1445,7 @@ function waitForIdlePrefetchWindow(): Promise<void> {
 
 function isOriginFirstStaticPath(pathname: string): boolean {
   return (
-    pathname === '/' ||
-    pathname.endsWith('/index.html') ||
+    shouldMirrorToAppShellAliases(pathname) ||
     pathname.endsWith('/version.json') ||
     pathname.endsWith('/manifest.json') ||
     pathname.endsWith('/sw.js') ||
@@ -4490,8 +4493,10 @@ function createBufferedMediaResponse(
 
 async function handleStaticRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const isHtmlRequest =
-    request.mode === 'navigate' || url.pathname.endsWith('.html');
+  const isAppShellRequest = shouldUseAppShellStrategy(
+    request.mode,
+    url.pathname
+  );
   const versionState = await readVersionState();
   const committedVersion = versionState.committedVersion || APP_VERSION;
   const committedStaticCacheName = getStaticCacheName(committedVersion);
@@ -4519,7 +4524,7 @@ async function handleStaticRequest(request: Request): Promise<Response> {
       if (!response.ok) {
         let cachedResponse = await cache.match(request);
 
-        if (!cachedResponse && isHtmlRequest) {
+        if (!cachedResponse && isAppShellRequest) {
           cachedResponse = await cache.match('/');
           if (!cachedResponse) {
             cachedResponse = await cache.match('/index.html');
@@ -4542,7 +4547,7 @@ async function handleStaticRequest(request: Request): Promise<Response> {
       let cachedResponse = await cache.match(request);
 
       // For SPA navigation, fall back to index.html
-      if (!cachedResponse && isHtmlRequest) {
+      if (!cachedResponse && isAppShellRequest) {
         cachedResponse = await cache.match('/');
         if (!cachedResponse) {
           cachedResponse = await cache.match('/index.html');
@@ -4554,7 +4559,7 @@ async function handleStaticRequest(request: Request): Promise<Response> {
       }
 
       // No cache available
-      if (isHtmlRequest) {
+      if (isAppShellRequest) {
         return createOfflinePage();
       }
       return new Response('Resource unavailable', { status: 503 });
@@ -4569,7 +4574,7 @@ async function handleStaticRequest(request: Request): Promise<Response> {
   // This keeps existing users on the old shell while the new worker prewarms
   // its own versioned cache in the background, and only switches after the
   // user explicitly confirms the upgrade.
-  if (isHtmlRequest) {
+  if (isAppShellRequest) {
     let cachedResponse = await cache.match(request);
 
     if (!cachedResponse) {
@@ -4620,7 +4625,7 @@ async function handleStaticRequest(request: Request): Promise<Response> {
         cache.put(request, response.clone());
         // 同时存 '/' 和 '/index.html'，确保后续导航请求直接命中
         const reqUrl = new URL(request.url);
-        if (reqUrl.pathname === '/' || reqUrl.pathname.endsWith('/index.html')) {
+        if (shouldMirrorToAppShellAliases(reqUrl.pathname)) {
           const rootUrl = new URL('/', reqUrl.origin).href;
           const indexUrl = new URL('/index.html', reqUrl.origin).href;
           if (request.url !== rootUrl) cache.put(rootUrl, response.clone());
