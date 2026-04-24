@@ -1,12 +1,10 @@
 export type IdlePrefetchGroup =
   | 'ai-chat'
-  | 'tool-runtime'
-  | 'tool-drawers'
-  | 'tool-dialogs'
-  | 'tool-commanding'
+  | 'tool-windows'
   | 'diagram-engines'
   | 'office-data'
-  | 'external-skills';
+  | 'external-skills'
+  | 'offline-static-assets';
 
 interface IdlePrefetchMessage {
   type: 'SW_PREFETCH_GROUPS';

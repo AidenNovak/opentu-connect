@@ -30,11 +30,110 @@ const IDLE_PREFETCH_GROUPS = [
   'diagram-engines',
   'office-data',
   'external-skills',
+  'offline-static-assets',
 ] as const;
 
 const IDLE_PREFETCH_DEFAULTS = ['tool-windows'] as const;
 
 type IdlePrefetchGroup = (typeof IDLE_PREFETCH_GROUPS)[number];
+
+type ManifestEntry = { url: string; revision: string };
+
+const STATIC_SCAN_EXCLUDED_DIRS = new Set([
+  'product_showcase',
+  'help_tooltips',
+  'sw-debug',
+]);
+
+const STATIC_SCAN_EXCLUDED_PATTERNS = [
+  /stats\.html$/,
+  /\.map$/,
+  /precache-manifest\.json$/,
+  /idle-prefetch-manifest\.json$/,
+  /sw\.js$/,
+  /sw-debug\.html$/,
+  /changelog\.json$/,
+  /version\.json$/,
+];
+
+const PRECACHE_EXTENSIONS = new Set(['.js', '.css', '.json', '.svg', '.ico']);
+const POST_BOOT_PREFETCH_EXTENSIONS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.avif',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.eot',
+  '.wasm',
+  '.txt',
+  '.md',
+]);
+const PRECACHE_ALWAYS_INCLUDE = new Set([
+  '/index.html',
+  '/manifest.json',
+  '/favicon.ico',
+]);
+
+function createRevision(fullPath: string): string {
+  const content = fs.readFileSync(fullPath);
+  return crypto
+    .createHash('md5')
+    .update(new Uint8Array(content))
+    .digest('hex')
+    .substring(0, 8);
+}
+
+function shouldExcludeStaticScanUrl(url: string): boolean {
+  return STATIC_SCAN_EXCLUDED_PATTERNS.some((pattern) => pattern.test(url));
+}
+
+function collectStaticEntries(
+  outDir: string,
+  shouldInclude: (url: string, ext: string) => boolean
+): ManifestEntry[] {
+  const manifest: ManifestEntry[] = [];
+
+  function scanDir(dir: string, base = '') {
+    if (!fs.existsSync(dir)) return;
+
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      const relativePath = path.join(base, entry.name).replace(/\\/g, '/');
+
+      if (entry.isDirectory()) {
+        if (!STATIC_SCAN_EXCLUDED_DIRS.has(entry.name)) {
+          scanDir(fullPath, relativePath);
+        }
+        continue;
+      }
+
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      const ext = path.extname(entry.name).toLowerCase();
+      const url = '/' + relativePath;
+
+      if (shouldExcludeStaticScanUrl(url) || !shouldInclude(url, ext)) {
+        continue;
+      }
+
+      manifest.push({
+        url,
+        revision: createRevision(fullPath),
+      });
+    }
+  }
+
+  scanDir(outDir);
+  manifest.sort((a, b) => a.url.localeCompare(b.url));
+  return manifest;
+}
 
 function normalizePathForChunking(id: string): string {
   return id.replace(/\\/g, '/');
@@ -92,85 +191,12 @@ function precacheManifestPlugin(): Plugin {
       order: 'post',
       async handler() {
         const outDir = path.resolve(__dirname, '../../dist/apps/web');
-
-        // 需要预缓存的文件扩展名
-        const PRECACHE_EXTENSIONS = ['.js', '.css', '.json', '.svg', '.ico'];
-        // 排除的文件模式
-        const EXCLUDE_PATTERNS = [
-          /stats\.html$/, // Vite visualizer
-          /\.map$/, // Source maps
-          /precache-manifest\.json$/, // 自身
-          /idle-prefetch-manifest\.json$/, // idle 预取清单
-          /sw\.js$/, // Service Worker 本身不需要预缓存
-          /sw-debug\.html$/, // 调试面板，仅在访问时加载
-          /changelog\.json$/, // 版本日志，需要始终获取最新
-          /version\.json$/, // 版本信息，需要始终获取最新
-        ];
-        // 总是包含的关键文件
-        const ALWAYS_INCLUDE = [
-          '/index.html',
-          '/manifest.json',
-          '/favicon.ico',
-        ];
-
-        const manifest: { url: string; revision: string }[] = [];
-
-        // 递归扫描目录
-        function scanDir(dir: string, base = '') {
-          if (!fs.existsSync(dir)) return;
-
-          const entries = fs.readdirSync(dir, { withFileTypes: true });
-          for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name);
-            const relativePath = path
-              .join(base, entry.name)
-              .replace(/\\/g, '/');
-
-            if (entry.isDirectory()) {
-              // 跳过不需要预缓存的目录
-              // - product_showcase, help_tooltips: 大型资源目录
-              // - sw-debug: 调试面板，仅在访问 /sw-debug.html 时加载
-              if (
-                !['product_showcase', 'help_tooltips', 'sw-debug'].includes(
-                  entry.name
-                )
-              ) {
-                scanDir(fullPath, relativePath);
-              }
-            } else if (entry.isFile()) {
-              const ext = path.extname(entry.name).toLowerCase();
-              const url = '/' + relativePath;
-
-              // 检查是否应该排除
-              const shouldExclude = EXCLUDE_PATTERNS.some((pattern) =>
-                pattern.test(url)
-              );
-              if (shouldExclude) continue;
-
-              // 检查是否是需要预缓存的文件类型
-              const shouldInclude =
-                ALWAYS_INCLUDE.includes(url) ||
-                (ext !== '.html' && PRECACHE_EXTENSIONS.includes(ext));
-
-              if (shouldInclude) {
-                // 计算文件哈希作为 revision
-                const content = fs.readFileSync(fullPath);
-                const hash = crypto
-                  .createHash('md5')
-                  .update(new Uint8Array(content))
-                  .digest('hex')
-                  .substring(0, 8);
-
-                manifest.push({ url, revision: hash });
-              }
-            }
-          }
-        }
-
-        scanDir(outDir);
-
-        // 按 URL 排序，便于调试
-        manifest.sort((a, b) => a.url.localeCompare(b.url));
+        const manifest = collectStaticEntries(
+          outDir,
+          (url, ext) =>
+            PRECACHE_ALWAYS_INCLUDE.has(url) ||
+            (ext !== '.html' && PRECACHE_EXTENSIONS.has(ext))
+        );
 
         // 写入 manifest 文件
         const manifestPath = path.join(outDir, 'precache-manifest.json');
@@ -202,6 +228,7 @@ function idlePrefetchManifestPlugin(): Plugin {
       async handler() {
         const outDir = path.resolve(__dirname, '../../dist/apps/web');
         const assetsDir = path.join(outDir, 'assets');
+        const precacheManifestPath = path.join(outDir, 'precache-manifest.json');
         const groups = Object.fromEntries(
           IDLE_PREFETCH_GROUPS.map((group) => [
             group,
@@ -211,10 +238,32 @@ function idlePrefetchManifestPlugin(): Plugin {
           IdlePrefetchGroup,
           Array<{ url: string; revision: string }>
         >;
+        const precachedUrls = new Set<string>();
+
+        if (fs.existsSync(precacheManifestPath)) {
+          try {
+            const precacheManifest = JSON.parse(
+              fs.readFileSync(precacheManifestPath, 'utf8')
+            ) as { files?: Array<{ url?: string }> };
+            for (const entry of precacheManifest.files || []) {
+              if (typeof entry.url === 'string' && entry.url.length > 0) {
+                precachedUrls.add(entry.url);
+              }
+            }
+          } catch (error) {
+            console.warn(
+              '[IdlePrefetch] Failed to read precache-manifest.json:',
+              error
+            );
+          }
+        }
 
         if (fs.existsSync(assetsDir)) {
           const files = fs.readdirSync(assetsDir);
           for (const group of IDLE_PREFETCH_GROUPS) {
+            if (group === 'offline-static-assets') {
+              continue;
+            }
             const groupFiles = files.filter((file) => {
               const lower = file.toLowerCase();
               return (
@@ -238,6 +287,14 @@ function idlePrefetchManifestPlugin(): Plugin {
             }
           }
         }
+
+        groups['offline-static-assets'] = collectStaticEntries(
+          outDir,
+          (url, ext) =>
+            !precachedUrls.has(url) &&
+            ext !== '.html' &&
+            POST_BOOT_PREFETCH_EXTENSIONS.has(ext)
+        );
 
         const manifestPath = path.join(outDir, 'idle-prefetch-manifest.json');
         fs.writeFileSync(

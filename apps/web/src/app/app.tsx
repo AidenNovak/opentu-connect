@@ -11,6 +11,7 @@ import {
   safeReload,
   useDocumentTitle,
   markTabSyncVersion,
+  requestServiceWorkerIdlePrefetch,
 } from '@drawnix/drawnix/runtime';
 import {
   PlaitBoard,
@@ -235,6 +236,14 @@ export function App() {
     if (showCrashDialog || initError || !isLoading) {
       bootController.markReady();
     }
+  }, [initError, isLoading, showCrashDialog]);
+
+  useEffect(() => {
+    if (showCrashDialog || initError || isLoading) {
+      return;
+    }
+
+    requestServiceWorkerIdlePrefetch(['offline-static-assets']);
   }, [initError, isLoading, showCrashDialog]);
 
   // Initialize workspace and handle migration
