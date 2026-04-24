@@ -1,3 +1,19 @@
+## 0.6.65 (2026-04-24)
+
+### 🩹 Fixes
+
+- 限制 app shell 仅匹配根壳页面 ([f78d33ee](https://github.com/ljquan/aitu/commit/f78d33ee))
+- 修复离线模式下懒加载模块资源未预热 ([68d368fc](https://github.com/ljquan/aitu/commit/68d368fc))
+
+### 🔧 Chores
+
+- 更新版本号至0.6.64并修正回滚脚本参数顺序 ([7e024607](https://github.com/ljquan/aitu/commit/7e024607))
+- docs: 添加CDN熔断与静态资源可用性问题的经验总结 ([b46459a1](https://github.com/ljquan/aitu/commit/b46459a1))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.6.64 (2026-04-23)
 
 ### 🚀 Features

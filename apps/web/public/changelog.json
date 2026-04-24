@@ -1,6 +1,22 @@
 {
   "versions": [
     {
+      "version": "0.6.65",
+      "date": "2026-04-24",
+      "changes": {
+        "features": [],
+        "fixes": [
+          "限制 app shell 仅匹配根壳页面",
+          "修复离线模式下懒加载模块资源未预热"
+        ],
+        "improvements": [
+          "更新版本号至0.6.64并修正回滚脚本参数顺序"
+        ]
+      },
+      "type": "patch",
+      "highlights": "限制 app shell 仅匹配根壳页面"
+    },
+    {
       "version": "0.6.64",
       "date": "2026-04-23",
       "changes": {
