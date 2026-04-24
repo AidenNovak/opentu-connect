@@ -347,7 +347,8 @@ function cleanResourcePath(resourcePath: string): string {
 
   try {
     if (/^https?:\/\//i.test(normalizedPath)) {
-      normalizedPath = new URL(normalizedPath).pathname;
+      const absoluteUrl = new URL(normalizedPath);
+      normalizedPath = `${absoluteUrl.pathname}${absoluteUrl.search}`;
     }
   } catch {
     // 保持原始路径，继续走后续正则归一化。
@@ -367,11 +368,55 @@ export function extractVersionFromCDNPath(
   return match ? match[1] : null;
 }
 
+function buildThirdPartyCDNUrl(
+  source: CDNSource,
+  resourcePath: string
+): string | null {
+  const rawPath = String(resourcePath || '').trim();
+  if (!rawPath) {
+    return null;
+  }
+
+  let normalizedPath = rawPath;
+
+  try {
+    if (/^https?:\/\//i.test(normalizedPath)) {
+      const absoluteUrl = new URL(normalizedPath);
+      normalizedPath = `${absoluteUrl.pathname}${absoluteUrl.search}`;
+    }
+  } catch {
+    // 保持原始路径，继续走 npm 包路径识别。
+  }
+
+  const packagePath = normalizedPath.startsWith('/')
+    ? normalizedPath
+    : `/${normalizedPath}`;
+
+  if (!/^\/npm\/(?!aitu-app@)[^/]+@[^/]+\//.test(packagePath)) {
+    return null;
+  }
+
+  if (source.name === 'jsdelivr') {
+    return `https://cdn.jsdelivr.net${packagePath}`;
+  }
+
+  if (source.name === 'unpkg') {
+    return `https://unpkg.com/${packagePath.replace(/^\/npm\//, '')}`;
+  }
+
+  return null;
+}
+
 export function buildCDNUrl(
   source: CDNSource,
   version: string,
   resourcePath: string
 ): string {
+  const thirdPartyCDNUrl = buildThirdPartyCDNUrl(source, resourcePath);
+  if (thirdPartyCDNUrl) {
+    return thirdPartyCDNUrl;
+  }
+
   const cleanPath = cleanResourcePath(resourcePath);
   return source.urlTemplate
     .replace('{version}', version)

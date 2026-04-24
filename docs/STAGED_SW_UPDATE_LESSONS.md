@@ -902,3 +902,82 @@
 - **按需模块预热不能只预热代码 chunk**
 - **完整离线补齐组不能直接拿来当默认预热组**
 - **默认预热要单独拆出运行时静态资源层，UI ready 也要按完整依赖组判断**
+
+## 2026-04-24：跨域静态资源缓存 key 与第三方 CDN 路径要分开处理
+
+这轮线上问题还有两个更隐蔽的坑：
+
+### 现象
+
+- `Cache Storage` 里已经能看到某些 `/assets/...` 文件
+- 但切到离线模式后，请求 `https://cdn.jsdelivr.net/npm/aitu-app@<version>/assets/...`
+  仍然被 SW 返回 `503`
+- 某些第三方资源还会出现这种错误回退：
+  - 期望：`https://cdn.jsdelivr.net/npm/winbox@0.2.82/dist/...`
+  - 实际被拼成：`https://cdn.jsdelivr.net/npm/aitu-app@<appVersion>/npm/winbox@0.2.82/dist/...`
+
+### 根因
+
+#### 1. 预缓存写入 key 和运行时读取 key 不一致
+
+预热/预缓存时，为了统一源站与 CDN 地址，会把静态资源写入成“同源归一化 key”，例如：
+
+- 请求地址：`https://cdn.jsdelivr.net/npm/aitu-app@0.6.67/assets/a.js`
+- 实际缓存 key：`https://pr.opentu.ai/assets/a.js`
+
+如果运行时读取仍只按原始请求 URL 查：
+
+- `cache.match(request)`
+
+那离线时就会 miss，哪怕缓存里已经有同内容。
+
+#### 2. 第三方 npm 包路径不能复用 `aitu-app` 模板
+
+像这类资源：
+
+- `/npm/winbox@0.2.82/dist/winbox.bundle.min.js`
+
+它本身已经是“第三方包路径”。
+
+如果还按自家应用资源那套规则去拼：
+
+- `https://cdn.jsdelivr.net/npm/aitu-app@{version}/{path}`
+
+就会把第三方路径错误地套进 `aitu-app@版本` 目录下，必然 404 或离线兜底失败。
+
+### 这次固化出来的规则
+
+#### 1. 静态资源缓存读取必须双查
+
+运行时静态资源命中缓存时，至少要查两把 key：
+
+- 原始请求 URL
+- 归一化后的同源 cache key
+
+并且回查旧版本 cache 时，也要用同一套 key 规则。
+
+#### 2. 运行时写缓存也要统一落到归一化 key
+
+不然就会出现：
+
+- 预缓存写一套 key
+- 运行时补缓存再写另一套 key
+
+最后同一份资源在不同 key 下分裂，离线行为不可预测。
+
+#### 3. 第三方 npm 资源要单独识别
+
+对于 `/npm/<pkg>@<version>/...` 这类第三方资源：
+
+- 不要套 `aitu-app@APP_VERSION`
+- 应该直接构造真实第三方 CDN 地址
+- 本地源站 fallback 也只能作为兜底，不能改写包名和版本语义
+
+### 适合固化的检查清单
+
+- 线上静态资源如果“明明缓存里有，离线却 503”，先查：
+  - 写缓存的 key 是什么
+  - 读缓存时查的是不是同一把 key
+- 运行时 `cache.put` 和安装阶段 `cache.put` 是否共用同一套归一化规则？
+- 第三方 npm 包 URL 是否被错误套进业务应用包模板？
+- `cdn.jsdelivr.net/npm/<pkg>@<ver>/...` 这类请求，回退逻辑是否保留了原包名和版本？

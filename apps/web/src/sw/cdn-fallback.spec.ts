@@ -101,6 +101,30 @@ describe('cdn-fallback', () => {
     ).toBe('https://cdn.jsdelivr.net/npm/aitu-app@3.0.0/assets/tool-drawers.css');
   });
 
+  it('keeps third-party npm package URLs out of the aitu-app version template', () => {
+    const [jsdelivr] = getAvailableCDNs('3.0.0');
+
+    expect(
+      buildCDNUrl(
+        jsdelivr,
+        '3.0.0',
+        '/npm/winbox@0.2.82/dist/winbox.bundle.min.js'
+      )
+    ).toBe('https://cdn.jsdelivr.net/npm/winbox@0.2.82/dist/winbox.bundle.min.js');
+  });
+
+  it('rewrites same-origin third-party npm package paths back to jsdelivr package URLs', () => {
+    const [jsdelivr] = getAvailableCDNs('3.0.0');
+
+    expect(
+      buildCDNUrl(
+        jsdelivr,
+        '3.0.0',
+        'https://pr.opentu.ai/npm/winbox@0.2.82/dist/winbox.bundle.min.js'
+      )
+    ).toBe('https://cdn.jsdelivr.net/npm/winbox@0.2.82/dist/winbox.bundle.min.js');
+  });
+
   it('uses CDN first for same-origin absolute asset URLs', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
