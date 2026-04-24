@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "0.6.66",
+      "date": "2026-04-24",
+      "changes": {
+        "features": [],
+        "fixes": [
+          "修正按需资源预缓存与预热分组"
+        ],
+        "improvements": []
+      },
+      "type": "patch",
+      "highlights": "修正按需资源预缓存与预热分组"
+    },
+    {
       "version": "0.6.65",
       "date": "2026-04-24",
       "changes": {

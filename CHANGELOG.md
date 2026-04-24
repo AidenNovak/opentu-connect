@@ -1,3 +1,13 @@
+## 0.6.66 (2026-04-24)
+
+### 🩹 Fixes
+
+- 修正按需资源预缓存与预热分组 ([ccb41849](https://github.com/ljquan/aitu/commit/ccb41849))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.6.65 (2026-04-24)
 
 ### 🩹 Fixes
