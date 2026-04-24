@@ -1,6 +1,8 @@
 {
-  "version": "0.6.67",
-  "buildTime": "2026-04-24T03:30:30.732Z",
+  "version": "0.6.68",
+  "buildTime": "2026-04-24T04:03:03.556Z",
   "gitCommit": "unknown",
-  "changelog": []
+  "changelog": [
+    "修正跨域静态资源离线缓存命中"
+  ]
 }

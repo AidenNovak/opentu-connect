@@ -1,3 +1,13 @@
+## 0.6.68 (2026-04-24)
+
+### 🩹 Fixes
+
+- 修正跨域静态资源离线缓存命中 ([5b2d6774](https://github.com/ljquan/aitu/commit/5b2d6774))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.6.66 (2026-04-24)
 
 ### 🩹 Fixes

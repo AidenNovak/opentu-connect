@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "0.6.68",
+      "date": "2026-04-24",
+      "changes": {
+        "features": [],
+        "fixes": [
+          "修正跨域静态资源离线缓存命中"
+        ],
+        "improvements": []
+      },
+      "type": "patch",
+      "highlights": "修正跨域静态资源离线缓存命中"
+    },
+    {
       "version": "0.6.66",
       "date": "2026-04-24",
       "changes": {
