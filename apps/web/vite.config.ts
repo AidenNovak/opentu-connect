@@ -30,10 +30,14 @@ const IDLE_PREFETCH_GROUPS = [
   'diagram-engines',
   'office-data',
   'external-skills',
+  'runtime-static-assets',
   'offline-static-assets',
 ] as const;
 
-const IDLE_PREFETCH_DEFAULTS = ['tool-windows'] as const;
+const IDLE_PREFETCH_DEFAULTS = [
+  'tool-windows',
+  'runtime-static-assets',
+] as const;
 
 type IdlePrefetchGroup = (typeof IDLE_PREFETCH_GROUPS)[number];
 
@@ -89,6 +93,11 @@ function createRevision(fullPath: string): string {
 
 function shouldExcludeStaticScanUrl(url: string): boolean {
   return STATIC_SCAN_EXCLUDED_PATTERNS.some((pattern) => pattern.test(url));
+}
+
+function isRuntimeStaticAssetUrl(url: string): boolean {
+  // 仅覆盖构建产物中的运行时附属资源，避免把手册截图等大文件带进默认 idle 预取。
+  return url.startsWith('/assets/');
 }
 
 function collectStaticEntries(
@@ -288,10 +297,24 @@ function idlePrefetchManifestPlugin(): Plugin {
           }
         }
 
+        groups['runtime-static-assets'] = collectStaticEntries(
+          outDir,
+          (url, ext) =>
+            !precachedUrls.has(url) &&
+            ext !== '.html' &&
+            POST_BOOT_PREFETCH_EXTENSIONS.has(ext) &&
+            isRuntimeStaticAssetUrl(url)
+        );
+
+        const runtimeStaticUrls = new Set(
+          groups['runtime-static-assets'].map((entry) => entry.url)
+        );
+
         groups['offline-static-assets'] = collectStaticEntries(
           outDir,
           (url, ext) =>
             !precachedUrls.has(url) &&
+            !runtimeStaticUrls.has(url) &&
             ext !== '.html' &&
             POST_BOOT_PREFETCH_EXTENSIONS.has(ext)
         );

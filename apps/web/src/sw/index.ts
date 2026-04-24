@@ -36,7 +36,9 @@ import {
 } from './cdn-fallback';
 import { getSafeErrorMessage } from './task-queue/utils/sanitize-utils';
 import {
+  shouldUseCDNFirstPreload,
   shouldMirrorToAppShellAliases,
+  shouldUseOriginFirstPreload,
   shouldUseAppShellStrategy,
 } from './app-shell-routing';
 
@@ -1444,13 +1446,7 @@ function waitForIdlePrefetchWindow(): Promise<void> {
 }
 
 function isOriginFirstStaticPath(pathname: string): boolean {
-  return (
-    shouldMirrorToAppShellAliases(pathname) ||
-    pathname.endsWith('/version.json') ||
-    pathname.endsWith('/manifest.json') ||
-    pathname.endsWith('/sw.js') ||
-    pathname.endsWith('/precache-manifest.json')
-  );
+  return shouldUseOriginFirstPreload(pathname);
 }
 
 function isVersionedStaticResource(request: Request, url: URL): boolean {
@@ -1575,8 +1571,8 @@ async function findStaticResponseInOldCaches(
 
 /**
  * 缓存单个文件
- * - HTML 文件从当前服务器获取（确保最新版本）
- * - JS/CSS 等静态资源优先从 CDN 获取，失败后回退到服务器
+ * - 根壳与版本元数据保持同源优先，确保升级协议稳定
+ * - manifest 已知的其他静态资源统一优先走 CDN，失败后回退服务器
  */
 async function cacheFile(
   cache: Cache,
@@ -1610,13 +1606,15 @@ async function cacheFile(
     let response: Response | null = null;
     let source = 'server';
     let fetchTarget = targets.originFetchUrl;
-    const syntheticRequest = new Request(targets.cacheKey, { method: 'GET' });
 
-    if (isVersionedStaticResource(syntheticRequest, targets.requestUrl)) {
+    if (shouldUseCDNFirstPreload(targets.requestUrl.pathname)) {
       const cdnResult = await fetchFromCDNWithFallback(
         targets.resourcePath,
         APP_VERSION,
-        location.origin
+        location.origin,
+        {
+          preferLocal: false,
+        }
       );
 
       if (cdnResult?.response.ok) {
@@ -1635,7 +1633,7 @@ async function cacheFile(
     if (
       response.ok &&
       isStaticHtmlFallbackResponse(
-        syntheticRequest,
+        new Request(targets.cacheKey, { method: 'GET' }),
         targets.requestUrl,
         response
       )
@@ -1676,7 +1674,7 @@ async function cacheFile(
 /**
  * 预缓存静态资源
  * 使用并发控制避免同时发起太多请求
- * 同源优先策略：静态资源默认从当前服务器获取，CDN 仅作故障兜底
+ * 根壳与发布元数据保持同源优先，其余 manifest 静态资源统一 CDN 优先
  */
 async function precacheStaticFiles(
   cache: Cache,

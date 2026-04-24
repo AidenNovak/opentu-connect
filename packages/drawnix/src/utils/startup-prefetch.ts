@@ -4,6 +4,7 @@ export type IdlePrefetchGroup =
   | 'diagram-engines'
   | 'office-data'
   | 'external-skills'
+  | 'runtime-static-assets'
   | 'offline-static-assets';
 
 interface IdlePrefetchMessage {

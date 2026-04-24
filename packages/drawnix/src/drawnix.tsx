@@ -150,7 +150,10 @@ interface SWIdlePrefetchStatusMessage {
   completedGroups?: string[];
 }
 
-const TOOL_WINDOW_GROUPS: IdlePrefetchGroup[] = ['tool-windows'];
+const TOOL_WINDOW_GROUPS: IdlePrefetchGroup[] = [
+  'tool-windows',
+  'runtime-static-assets',
+];
 
 const DrawnixDeferredFeatures = lazy(() =>
   import('./components/startup/DrawnixDeferredFeatures').then((module) => ({
@@ -472,7 +475,11 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         return;
       }
 
-      if (!event.data.completedGroups?.includes('tool-windows')) {
+      if (
+        !TOOL_WINDOW_GROUPS.every((group) =>
+          event.data.completedGroups?.includes(group)
+        )
+      ) {
         return;
       }
 
