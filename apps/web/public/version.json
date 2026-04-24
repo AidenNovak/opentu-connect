@@ -1,8 +1,6 @@
 {
-  "version": "0.6.66",
-  "buildTime": "2026-04-24T03:11:37.737Z",
+  "version": "0.6.67",
+  "buildTime": "2026-04-24T03:30:30.732Z",
   "gitCommit": "unknown",
-  "changelog": [
-    "修正按需资源预缓存与预热分组"
-  ]
+  "changelog": []
 }
