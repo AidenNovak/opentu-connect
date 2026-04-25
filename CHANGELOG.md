@@ -1,3 +1,18 @@
+## 0.6.76 (2026-04-25)
+
+### 🚀 Features
+
+- 新增 OpenTu SEO 首页 ([99fca746](https://github.com/ljquan/aitu/commit/99fca746))
+
+### 🔧 Chores
+
+- 更新版本号至0.6.75并同步构建时间 ([cefc3cb1](https://github.com/ljquan/aitu/commit/cefc3cb1))
+- style(homepage): 优化主页布局与视觉设计 ([e23cdfab](https://github.com/ljquan/aitu/commit/e23cdfab))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.6.75 (2026-04-25)
 
 ### 🩹 Fixes

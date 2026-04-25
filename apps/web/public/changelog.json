@@ -1,6 +1,21 @@
 {
   "versions": [
     {
+      "version": "0.6.76",
+      "date": "2026-04-25",
+      "changes": {
+        "features": [
+          "新增 OpenTu SEO 首页"
+        ],
+        "fixes": [],
+        "improvements": [
+          "更新版本号至0.6.75并同步构建时间"
+        ]
+      },
+      "type": "patch",
+      "highlights": "新增 OpenTu SEO 首页"
+    },
+    {
       "version": "0.6.75",
       "date": "2026-04-25",
       "changes": {
