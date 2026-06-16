@@ -4,6 +4,10 @@ import type {
   ProviderTransportRequest,
   ResolvedProviderContext,
 } from './types';
+import {
+  loadTuziApiEndpointBaseUrls,
+  normalizeTuziApiEndpointUrl,
+} from './tuzi-api-endpoints';
 
 function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, '');
@@ -32,6 +36,36 @@ function joinUrl(baseUrl: string, path: string): string {
   const normalizedBase = trimTrailingSlashes(baseUrl);
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${normalizedBase}${normalizedPath}`;
+}
+
+function getBaseUrlPathSuffix(baseUrl: string): string {
+  try {
+    const parsed = new URL(trimTrailingSlashes(baseUrl));
+    return parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
+}
+
+function isFetchNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return /Failed to fetch|Load failed|NetworkError/i.test(error.message);
+}
+
+async function getTuziFallbackBaseUrls(baseUrl: string): Promise<string[]> {
+  const currentOrigin = normalizeTuziApiEndpointUrl(baseUrl);
+  const currentPathSuffix = getBaseUrlPathSuffix(baseUrl);
+  const tuziOrigins = await loadTuziApiEndpointBaseUrls();
+
+  if (!tuziOrigins.includes(currentOrigin)) {
+    return [];
+  }
+
+  return tuziOrigins
+    .filter((origin) => origin !== currentOrigin)
+    .map((origin) => `${origin}${currentPathSuffix}`);
 }
 
 function buildQueryString(
@@ -203,11 +237,29 @@ export class ProviderTransport {
     } catch (error) {
       if (timeoutControl.didTimeout()) {
         const timeoutMinutes = Math.floor((request.timeoutMs || 0) / 60000);
-        const timeoutError = new Error(
-          `请求超时（>${timeoutMinutes} 分钟）`
-        );
+        const timeoutError = new Error(`请求超时（>${timeoutMinutes} 分钟）`);
         timeoutError.name = 'TimeoutError';
         throw timeoutError;
+      }
+      if (isFetchNetworkError(error)) {
+        const fallbackBaseUrls = await getTuziFallbackBaseUrls(context.baseUrl);
+
+        for (const fallbackBaseUrl of fallbackBaseUrls) {
+          const fallbackPrepared = this.prepareRequest(
+            { ...context, baseUrl: fallbackBaseUrl },
+            { ...request, signal: timeoutControl.signal }
+          );
+          try {
+            return await fetcher(fallbackPrepared.url, fallbackPrepared.init);
+          } catch (fallbackError) {
+            if (
+              timeoutControl.didTimeout() ||
+              !isFetchNetworkError(fallbackError)
+            ) {
+              throw fallbackError;
+            }
+          }
+        }
       }
       throw error;
     } finally {
