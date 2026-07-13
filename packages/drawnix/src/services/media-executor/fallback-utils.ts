@@ -324,8 +324,14 @@ export async function cacheRemoteUrl(
         return normalizedUrl;
       }
 
-      await unifiedCacheService.cacheMediaFromBlob(
-        normalizedUrl,
+      const suffix = index !== undefined ? `_${index}` : '';
+      const localCacheUrl =
+        mediaType === 'audio'
+          ? normalizedUrl
+          : `/__aitu_cache__/${mediaType}/${taskId}${suffix}.${format}`;
+
+      const cacheUrl = await unifiedCacheService.cacheMediaFromBlob(
+        localCacheUrl,
         blob,
         mediaType,
         {
@@ -334,7 +340,7 @@ export async function cacheRemoteUrl(
           ...options?.extraMetadata,
         }
       );
-      return normalizedUrl;
+      return cacheUrl || normalizedUrl;
     } catch (error) {
       console.warn(
         '[cacheRemoteUrl] Remote media cache failed, using original URL:',

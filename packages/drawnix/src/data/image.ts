@@ -349,7 +349,9 @@ export const insertImageFromUrl = async (
       resolvedUrl,
       `insert-${Date.now()}`,
       'image',
-      'png'
+      'png',
+      undefined,
+      { forceRemoteCache: true }
     );
     if (cachedUrl !== resolvedUrl) {
       resolvedUrl = cachedUrl;
