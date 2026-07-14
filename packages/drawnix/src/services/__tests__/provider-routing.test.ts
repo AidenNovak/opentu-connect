@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   getTextBindingMaxImageCount,
   inferBindingsForProviderModel,
@@ -317,6 +317,39 @@ describe('provider routing', () => {
 
     expect(prepared.url).toBe(
       'https://api.tu-zi.com/v1beta/models/test:generateContent?key=secret'
+    );
+  });
+
+  it('does not retry non-Tuzi provider requests against Tuzi endpoints', async () => {
+    const fetcher = vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+
+    await expect(
+      providerTransport.send(
+        {
+          profileId: 'provider-openai',
+          profileName: 'OpenAI',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.openai.com/v1',
+          apiKey: 'openai-secret',
+          authType: 'bearer',
+        },
+        {
+          path: '/models',
+          fetcher,
+        }
+      )
+    ).rejects.toThrow('Failed to fetch');
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/models',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer openai-secret',
+        }),
+      })
     );
   });
 

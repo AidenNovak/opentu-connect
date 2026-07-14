@@ -1,6 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 
 describe('tuzi-api-endpoints', () => {
+  it('只把内置 tuzi-api 上游 origin 视为可信', async () => {
+    vi.resetModules();
+
+    const { isTrustedTuziApiBaseUrl } = await import(
+      '../provider-routing/tuzi-api-endpoints'
+    );
+
+    expect(isTrustedTuziApiBaseUrl('https://api.tu-zi.com/v1')).toBe(true);
+    expect(isTrustedTuziApiBaseUrl('https://apisz.ourzhishi.top/v1')).toBe(
+      true
+    );
+    expect(isTrustedTuziApiBaseUrl('https://api.openai.com/v1')).toBe(false);
+    expect(isTrustedTuziApiBaseUrl('https://evil.tu-zi.com/v1')).toBe(false);
+  });
+
   it('解析 tuzi-api 状态接口中的站点列表，并过滤非上游站点', async () => {
     vi.resetModules();
 

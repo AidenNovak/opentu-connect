@@ -55,6 +55,16 @@ export function normalizeTuziApiEndpointUrl(url?: string | null): string {
   }
 }
 
+const TRUSTED_TUZI_API_ORIGINS = new Set(
+  TUZI_API_FALLBACK_ENDPOINTS.map((endpoint) =>
+    normalizeTuziApiEndpointUrl(endpoint.url)
+  )
+);
+
+export function isTrustedTuziApiBaseUrl(url?: string | null): boolean {
+  return TRUSTED_TUZI_API_ORIGINS.has(normalizeTuziApiEndpointUrl(url));
+}
+
 function normalizeJsonLikeString(value: string): string {
   return value
     .replace(/([{,]\s*)([A-Za-z_$][\w$]*)(\s*:)/g, '$1"$2"$3')

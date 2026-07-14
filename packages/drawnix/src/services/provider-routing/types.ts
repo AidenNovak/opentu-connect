@@ -181,6 +181,11 @@ export interface ProviderTransportRequest {
   timeoutMs?: number;
   credentials?: RequestCredentials;
   fetcher?: typeof fetch;
+  /**
+   * 若提供，会被写入 X-Request-Id 请求头，用于超时/失败场景兜底找回。
+   * 目前主要用于图片生成接口。
+   */
+  requestId?: string;
 }
 
 export interface PreparedProviderTransportRequest {

@@ -101,6 +101,7 @@ import { HoverTip } from '../shared/hover';
 import { createProviderProfileDraft } from './provider-profile-draft';
 import { MessagePlugin } from '../../utils/message-plugin';
 import {
+  isTrustedTuziApiBaseUrl,
   loadTuziApiEndpointSources,
   TUZI_API_FALLBACK_ENDPOINTS,
   type TuziApiEndpointSource,
@@ -119,6 +120,13 @@ type ProviderNavigationIntent =
 
 const SETTINGS_PROVIDER_NAV_EVENT = 'aitu:settings:provider-nav';
 const SETTINGS_DIALOG_COMPACT_BREAKPOINT = 980;
+const TUZI_PROVIDER_PROFILE_IDS = new Set([
+  LEGACY_DEFAULT_PROVIDER_PROFILE_ID,
+  TUZI_ORIGINAL_PROVIDER_PROFILE_ID,
+  TUZI_MIX_PROVIDER_PROFILE_ID,
+  TUZI_CODEX_PROVIDER_PROFILE_ID,
+  TUZI_BUSINESS_PROVIDER_PROFILE_ID,
+]);
 let tuziApiEndpointCache: EndpointOption[] | null = null;
 
 interface EndpointOption {
@@ -128,6 +136,14 @@ interface EndpointOption {
   name?: string;
   description?: string;
   removable?: boolean;
+}
+
+function isTuziProviderProfile(profile?: ProviderProfile | null): boolean {
+  return Boolean(
+    profile &&
+      (TUZI_PROVIDER_PROFILE_IDS.has(profile.id) ||
+        isTrustedTuziApiBaseUrl(profile.baseUrl))
+  );
 }
 
 const VIEW_SECTIONS: Array<{ value: SettingsView; label: string }> = [
@@ -821,6 +837,7 @@ export const SettingsDialog = ({
     profilesDraft.find((profile) => profile.id === selectedProfileId) ||
     profilesDraft[0] ||
     null;
+  const isSelectedTuziProfile = isTuziProviderProfile(selectedProfile);
   const selectedImageApiCompatibilityHint = selectedProfile
     ? getImageApiCompatibilityHint(selectedProfile)
     : '同一个图片模型在不同 API Key 或网关下可能需要不同接口格式；不确定时使用自动。';
@@ -1035,7 +1052,9 @@ export const SettingsDialog = ({
   };
 
   useEffect(() => {
-    if (!appState.openSettings) {
+    if (!appState.openSettings || !isSelectedTuziProfile) {
+      setTuziApiEndpointOptions([]);
+      setTuziApiEndpointLoadError('');
       return;
     }
 
@@ -1108,7 +1127,7 @@ export const SettingsDialog = ({
     if (pendingProviderIntent?.action === 'create') {
       applyProviderNavigationIntent(pendingProviderIntent, nextProfiles);
     }
-  }, [appState.openSettings]);
+  }, [appState.openSettings, isSelectedTuziProfile]);
 
   useEffect(() => {
     if (!selectedProfileId && profilesDraft[0]) {
@@ -1788,7 +1807,9 @@ export const SettingsDialog = ({
         selectedProfile.id,
         normalizedBaseUrl,
         trimmedApiKey,
-        tuziApiEndpointOptions.map((endpoint) => endpoint.url)
+        isSelectedTuziProfile
+          ? tuziApiEndpointOptions.map((endpoint) => endpoint.url)
+          : []
       );
       analytics.trackUIInteraction({
         area: 'settings',
@@ -2620,180 +2641,186 @@ export const SettingsDialog = ({
                 }
                 placeholder={TUZI_PROVIDER_DEFAULT_BASE_URL}
               />
-              <div className="settings-dialog__endpoint-panel">
-                <div className="settings-dialog__endpoint-toolbar">
-                  <div className="settings-dialog__endpoint-title">
-                    <div className="settings-dialog__endpoint-count">
-                      {endpointOptions.length} 个端点
+              {isSelectedTuziProfile ? (
+                <div className="settings-dialog__endpoint-panel">
+                  <div className="settings-dialog__endpoint-toolbar">
+                    <div className="settings-dialog__endpoint-title">
+                      <div className="settings-dialog__endpoint-count">
+                        {endpointOptions.length} 个端点
+                      </div>
+                      <div className="settings-dialog__endpoint-source">
+                        来源: tuzi-api
+                      </div>
                     </div>
-                    <div className="settings-dialog__endpoint-source">
-                      来源: tuzi-api
-                    </div>
-                  </div>
-                  <div className="settings-dialog__endpoint-actions">
-                    <label className="settings-dialog__endpoint-auto">
-                      <input
-                        type="checkbox"
-                        checked={endpointSelectionMode === 'auto'}
-                        onChange={(event) =>
-                          handleEndpointAutoSelectChange(event.target.checked)
-                        }
-                      />
-                      <span>自动选择</span>
-                    </label>
-                    <button
-                      type="button"
-                      className="settings-dialog__endpoint-test-btn"
-                      onClick={() => void handleRunEndpointSpeedTest()}
-                      disabled={
-                        isEndpointTesting || endpointOptions.length === 0
-                      }
-                    >
-                      {isEndpointTesting ? (
-                        <Loader2
-                          size={14}
-                          className="settings-dialog__endpoint-spin"
-                        />
-                      ) : (
-                        <Zap size={15} />
-                      )}
-                      <span>测速</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="settings-dialog__endpoint-list">
-                  {endpointOptions.map((endpoint) => {
-                    const selected =
-                      endpoint.url === activeEndpoint.url ||
-                      (endpointSelectionMode === 'auto' &&
-                        endpoint.url === bestEndpoint.url);
-                    const latency = endpointLatencies[endpoint.url];
-                    const latencyText =
-                      typeof latency === 'number'
-                        ? `${latency}ms`
-                        : latency === 'failed'
-                        ? '失败'
-                        : '—';
-                    const latencyState =
-                      latency === 'failed'
-                        ? 'failed'
-                        : typeof latency === 'number' && latency < 300
-                        ? 'fast'
-                        : typeof latency === 'number' && latency >= 800
-                        ? 'slow'
-                        : null;
-
-                    return (
-                      <div
-                        key={endpoint.id}
-                        role="button"
-                        tabIndex={0}
-                        className={classNames('settings-dialog__endpoint-row', {
-                          'settings-dialog__endpoint-row--selected': selected,
-                        })}
-                        onClick={() => {
-                          handleEndpointSelect(endpoint.url, 'manual');
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            handleEndpointSelect(endpoint.url, 'manual');
+                    <div className="settings-dialog__endpoint-actions">
+                      <label className="settings-dialog__endpoint-auto">
+                        <input
+                          type="checkbox"
+                          checked={endpointSelectionMode === 'auto'}
+                          onChange={(event) =>
+                            handleEndpointAutoSelectChange(event.target.checked)
                           }
-                        }}
+                        />
+                        <span>自动选择</span>
+                      </label>
+                      <button
+                        type="button"
+                        className="settings-dialog__endpoint-test-btn"
+                        onClick={() => void handleRunEndpointSpeedTest()}
+                        disabled={
+                          isEndpointTesting || endpointOptions.length === 0
+                        }
                       >
-                        <span className="settings-dialog__endpoint-row-dot" />
-                        <span className="settings-dialog__endpoint-row-copy">
-                          <span className="settings-dialog__endpoint-row-name">
-                            {endpoint.name || endpoint.shortLabel}
-                          </span>
-                          <span className="settings-dialog__endpoint-row-url">
-                            {endpoint.url}
-                          </span>
-                          {endpoint.description ? (
-                            <span className="settings-dialog__endpoint-row-desc">
-                              {endpoint.description}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span
+                        {isEndpointTesting ? (
+                          <Loader2
+                            size={14}
+                            className="settings-dialog__endpoint-spin"
+                          />
+                        ) : (
+                          <Zap size={15} />
+                        )}
+                        <span>测速</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="settings-dialog__endpoint-list">
+                    {endpointOptions.map((endpoint) => {
+                      const selected =
+                        endpoint.url === activeEndpoint.url ||
+                        (endpointSelectionMode === 'auto' &&
+                          endpoint.url === bestEndpoint.url);
+                      const latency = endpointLatencies[endpoint.url];
+                      const latencyText =
+                        typeof latency === 'number'
+                          ? `${latency}ms`
+                          : latency === 'failed'
+                          ? '失败'
+                          : '—';
+                      const latencyState =
+                        latency === 'failed'
+                          ? 'failed'
+                          : typeof latency === 'number' && latency < 300
+                          ? 'fast'
+                          : typeof latency === 'number' && latency >= 800
+                          ? 'slow'
+                          : null;
+
+                      return (
+                        <div
+                          key={endpoint.id}
+                          role="button"
+                          tabIndex={0}
                           className={classNames(
-                            'settings-dialog__endpoint-row-latency',
+                            'settings-dialog__endpoint-row',
                             {
-                              'settings-dialog__endpoint-row-latency--fast':
-                                latencyState === 'fast',
-                              'settings-dialog__endpoint-row-latency--slow':
-                                latencyState === 'slow',
-                              'settings-dialog__endpoint-row-latency--failed':
-                                latencyState === 'failed',
+                              'settings-dialog__endpoint-row--selected':
+                                selected,
                             }
                           )}
-                        >
-                          {isEndpointTesting && latency == null ? (
-                            <Loader2
-                              size={14}
-                              className="settings-dialog__endpoint-spin"
-                            />
-                          ) : (
-                            latencyText
-                          )}
-                        </span>
-                        {endpoint.removable ? (
-                          <button
-                            type="button"
-                            className="settings-dialog__endpoint-remove"
-                            onClick={(event) => {
+                          onClick={() => {
+                            handleEndpointSelect(endpoint.url, 'manual');
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault();
-                              event.stopPropagation();
-                              handleRemoveCustomEndpoint(endpoint);
-                            }}
-                          >
-                            <X size={17} />
-                          </button>
-                        ) : (
-                          <span className="settings-dialog__endpoint-remove-placeholder">
-                            —
+                              handleEndpointSelect(endpoint.url, 'manual');
+                            }
+                          }}
+                        >
+                          <span className="settings-dialog__endpoint-row-dot" />
+                          <span className="settings-dialog__endpoint-row-copy">
+                            <span className="settings-dialog__endpoint-row-name">
+                              {endpoint.name || endpoint.shortLabel}
+                            </span>
+                            <span className="settings-dialog__endpoint-row-url">
+                              {endpoint.url}
+                            </span>
+                            {endpoint.description ? (
+                              <span className="settings-dialog__endpoint-row-desc">
+                                {endpoint.description}
+                              </span>
+                            ) : null}
                           </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                          <span
+                            className={classNames(
+                              'settings-dialog__endpoint-row-latency',
+                              {
+                                'settings-dialog__endpoint-row-latency--fast':
+                                  latencyState === 'fast',
+                                'settings-dialog__endpoint-row-latency--slow':
+                                  latencyState === 'slow',
+                                'settings-dialog__endpoint-row-latency--failed':
+                                  latencyState === 'failed',
+                              }
+                            )}
+                          >
+                            {isEndpointTesting && latency == null ? (
+                              <Loader2
+                                size={14}
+                                className="settings-dialog__endpoint-spin"
+                              />
+                            ) : (
+                              latencyText
+                            )}
+                          </span>
+                          {endpoint.removable ? (
+                            <button
+                              type="button"
+                              className="settings-dialog__endpoint-remove"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleRemoveCustomEndpoint(endpoint);
+                              }}
+                            >
+                              <X size={17} />
+                            </button>
+                          ) : (
+                            <span className="settings-dialog__endpoint-remove-placeholder">
+                              —
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                <div className="settings-dialog__endpoint-add">
-                  <input
-                    value={customEndpointUrl}
-                    placeholder="https://api.example.com"
-                    onChange={(event) => {
-                      setCustomEndpointUrl(event.target.value);
-                      setEndpointAddError('');
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        handleAddCustomEndpoint();
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="settings-dialog__endpoint-add-btn"
-                    onClick={handleAddCustomEndpoint}
-                  >
-                    <Plus size={18} />
-                  </button>
+                  <div className="settings-dialog__endpoint-add">
+                    <input
+                      value={customEndpointUrl}
+                      placeholder="https://api.example.com"
+                      onChange={(event) => {
+                        setCustomEndpointUrl(event.target.value);
+                        setEndpointAddError('');
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          handleAddCustomEndpoint();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="settings-dialog__endpoint-add-btn"
+                      onClick={handleAddCustomEndpoint}
+                    >
+                      <Plus size={18} />
+                    </button>
+                  </div>
+                  {endpointAddError ? (
+                    <div className="settings-dialog__endpoint-error">
+                      {endpointAddError}
+                    </div>
+                  ) : null}
+                  {tuziApiEndpointLoadError ? (
+                    <div className="settings-dialog__endpoint-error">
+                      {tuziApiEndpointLoadError}
+                    </div>
+                  ) : null}
                 </div>
-                {endpointAddError ? (
-                  <div className="settings-dialog__endpoint-error">
-                    {endpointAddError}
-                  </div>
-                ) : null}
-                {tuziApiEndpointLoadError ? (
-                  <div className="settings-dialog__endpoint-error">
-                    {tuziApiEndpointLoadError}
-                  </div>
-                ) : null}
-              </div>
+              ) : null}
             </div>
 
             <div className="settings-dialog__field settings-dialog__field--column settings-dialog__field--full">

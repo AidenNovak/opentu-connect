@@ -424,6 +424,62 @@ describe('runtime-model-discovery', () => {
     });
   });
 
+  it('非 tuzi-api 主端点失败时不会把 API Key 发送到 tuzi-api 候选端点', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === 'https://api.openai.com/v1/models') {
+        throw new TypeError('Failed to fetch');
+      }
+      throw new Error(`Unexpected url: ${url}`);
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    vi.doMock('../settings-manager', () => ({
+      LEGACY_DEFAULT_PROVIDER_PROFILE_ID: 'legacy-default',
+      providerCatalogsSettings: {
+        get: () => [],
+        addListener: () => {},
+        removeListener: () => {},
+        update: async () => {},
+      },
+      providerProfilesSettings: {
+        get: () => [],
+        addListener: () => {},
+        removeListener: () => {},
+      },
+      invocationPresetsSettings: {
+        addListener: () => {},
+        removeListener: () => {},
+      },
+      settingsManager: {
+        getSetting: () => ({}),
+        addListener: () => {},
+        removeListener: () => {},
+      },
+    }));
+
+    const { runtimeModelDiscovery } = await import(
+      '../runtime-model-discovery'
+    );
+
+    await expect(
+      runtimeModelDiscovery.discover(
+        'provider-openai',
+        'https://api.openai.com/v1',
+        'openai-secret',
+        ['https://api.tu-zi.com']
+      )
+    ).rejects.toThrow('Failed to fetch');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/models',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer openai-secret' },
+      })
+    );
+  });
+
   it('不会把 OpenAI 自有 omni 模型误归类为 Gemini', async () => {
     vi.stubGlobal(
       'fetch',

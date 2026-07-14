@@ -28,6 +28,7 @@ import {
   isSunoLikeModelId,
 } from './suno-model-aliases';
 import { sortModelsByDisplayPriority } from './model-sort';
+import { isTrustedTuziApiBaseUrl } from '../services/provider-routing/tuzi-api-endpoints';
 
 const LEGACY_CACHE_KEY = 'drawnix-runtime-model-discovery';
 
@@ -165,8 +166,14 @@ function buildModelDiscoveryBaseUrls(
   fallbackBaseUrls: string[] = []
 ): string[] {
   const urls = new Map<string, string>();
+  const allowFallback = isTrustedTuziApiBaseUrl(primaryBaseUrl);
 
-  [primaryBaseUrl, ...fallbackBaseUrls].forEach((url) => {
+  [
+    primaryBaseUrl,
+    ...(allowFallback
+      ? fallbackBaseUrls.filter((url) => isTrustedTuziApiBaseUrl(url))
+      : []),
+  ].forEach((url) => {
     const normalized = normalizeModelApiBaseUrl(url);
     if (normalized && !urls.has(normalized)) {
       urls.set(normalized, normalized);

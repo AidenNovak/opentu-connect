@@ -5,6 +5,7 @@ import type {
   ResolvedProviderContext,
 } from './types';
 import {
+  isTrustedTuziApiBaseUrl,
   loadTuziApiEndpointBaseUrls,
   normalizeTuziApiEndpointUrl,
 } from './tuzi-api-endpoints';
@@ -13,11 +14,38 @@ function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
+/**
+ * DEV-ONLY: 把匹配的 API 站绝对 URL 改写为同源相对路径，
+ * 让请求走 vite dev proxy，规避浏览器对自定义头（如 X-Request-Id）的 CORS 拦截。
+ *
+ * 生产环境（import.meta.env.PROD）该逻辑不生效。
+ * 需与 apps/web/vite.config.ts 中的 server.proxy 配置配套使用。
+ */
+const DEV_PROXY_HOSTS: readonly string[] = ['api.tu-zi.com'];
+
+function rewriteBaseUrlForDevProxy(baseUrl: string): string {
+  try {
+    const isDev =
+      typeof import.meta !== 'undefined' &&
+      (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
+    if (!isDev) return baseUrl;
+    if (!/^https?:\/\//i.test(baseUrl)) return baseUrl;
+
+    const parsed = new URL(baseUrl);
+    if (!DEV_PROXY_HOSTS.includes(parsed.host)) return baseUrl;
+    // 只保留 pathname（如 /v1），改写为同源相对路径
+    return parsed.pathname.replace(/\/+$/, '');
+  } catch {
+    return baseUrl;
+  }
+}
+
 function applyBaseUrlStrategy(
   baseUrl: string,
   strategy: ProviderBaseUrlStrategy = 'preserve'
 ): string {
-  const normalizedBaseUrl = trimTrailingSlashes(baseUrl);
+  const rewritten = rewriteBaseUrlForDevProxy(baseUrl);
+  const normalizedBaseUrl = trimTrailingSlashes(rewritten);
 
   switch (strategy) {
     case 'trim-v1':
@@ -55,6 +83,10 @@ function isFetchNetworkError(error: unknown): boolean {
 }
 
 async function getTuziFallbackBaseUrls(baseUrl: string): Promise<string[]> {
+  if (!isTrustedTuziApiBaseUrl(baseUrl)) {
+    return [];
+  }
+
   const currentOrigin = normalizeTuziApiEndpointUrl(baseUrl);
   const currentPathSuffix = getBaseUrlPathSuffix(baseUrl);
   const tuziOrigins = await loadTuziApiEndpointBaseUrls();
@@ -189,6 +221,16 @@ function createTimeoutSignal(
   };
 }
 
+function applyRequestIdHeader(
+  headers: Record<string, string>,
+  requestId: string | undefined
+): Record<string, string> {
+  if (!requestId) {
+    return headers;
+  }
+  return { ...headers, 'X-Request-Id': requestId };
+}
+
 export class ProviderTransport {
   prepareRequest(
     context: ResolvedProviderContext,
@@ -196,6 +238,10 @@ export class ProviderTransport {
   ): PreparedProviderTransportRequest {
     const mergedHeaders = mergeHeaders(context.extraHeaders, request.headers);
     const authenticatedHeaders = applyAuthHeaders(context, mergedHeaders);
+    const finalHeaders = applyRequestIdHeader(
+      authenticatedHeaders,
+      request.requestId
+    );
     const query = applyAuthQuery(context, request.query || {});
     const resolvedBaseUrl = applyBaseUrlStrategy(
       context.baseUrl,
@@ -207,10 +253,10 @@ export class ProviderTransport {
 
     return {
       url,
-      headers: authenticatedHeaders,
+      headers: finalHeaders,
       init: {
         method: request.method || 'GET',
-        headers: authenticatedHeaders,
+        headers: finalHeaders,
         body: request.body,
         signal: request.signal,
         credentials: request.credentials,
@@ -237,8 +283,13 @@ export class ProviderTransport {
     } catch (error) {
       if (timeoutControl.didTimeout()) {
         const timeoutMinutes = Math.floor((request.timeoutMs || 0) / 60000);
-        const timeoutError = new Error(`请求超时（>${timeoutMinutes} 分钟）`);
+        const timeoutError: Error & { requestId?: string } = new Error(
+          `请求超时（>${timeoutMinutes} 分钟）`
+        );
         timeoutError.name = 'TimeoutError';
+        if (request.requestId) {
+          timeoutError.requestId = request.requestId;
+        }
         throw timeoutError;
       }
       if (isFetchNetworkError(error)) {
