@@ -4,6 +4,11 @@ import type {
   ProviderTransportRequest,
   ResolvedProviderContext,
 } from './types';
+import {
+  isTrustedTuziApiBaseUrl,
+  loadTuziApiEndpointBaseUrls,
+  normalizeTuziApiEndpointUrl,
+} from './tuzi-api-endpoints';
 
 function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, '');
@@ -21,7 +26,8 @@ const DEV_PROXY_HOSTS: readonly string[] = ['api.tu-zi.com'];
 function rewriteBaseUrlForDevProxy(baseUrl: string): string {
   try {
     const isDev =
-      typeof import.meta !== 'undefined' && (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
+      typeof import.meta !== 'undefined' &&
+      (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
     if (!isDev) return baseUrl;
     if (!/^https?:\/\//i.test(baseUrl)) return baseUrl;
 
@@ -58,6 +64,40 @@ function joinUrl(baseUrl: string, path: string): string {
   const normalizedBase = trimTrailingSlashes(baseUrl);
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${normalizedBase}${normalizedPath}`;
+}
+
+function getBaseUrlPathSuffix(baseUrl: string): string {
+  try {
+    const parsed = new URL(trimTrailingSlashes(baseUrl));
+    return parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
+}
+
+function isFetchNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return /Failed to fetch|Load failed|NetworkError/i.test(error.message);
+}
+
+async function getTuziFallbackBaseUrls(baseUrl: string): Promise<string[]> {
+  if (!isTrustedTuziApiBaseUrl(baseUrl)) {
+    return [];
+  }
+
+  const currentOrigin = normalizeTuziApiEndpointUrl(baseUrl);
+  const currentPathSuffix = getBaseUrlPathSuffix(baseUrl);
+  const tuziOrigins = await loadTuziApiEndpointBaseUrls();
+
+  if (!tuziOrigins.includes(currentOrigin)) {
+    return [];
+  }
+
+  return tuziOrigins
+    .filter((origin) => origin !== currentOrigin)
+    .map((origin) => `${origin}${currentPathSuffix}`);
 }
 
 function buildQueryString(
@@ -251,6 +291,26 @@ export class ProviderTransport {
           timeoutError.requestId = request.requestId;
         }
         throw timeoutError;
+      }
+      if (isFetchNetworkError(error)) {
+        const fallbackBaseUrls = await getTuziFallbackBaseUrls(context.baseUrl);
+
+        for (const fallbackBaseUrl of fallbackBaseUrls) {
+          const fallbackPrepared = this.prepareRequest(
+            { ...context, baseUrl: fallbackBaseUrl },
+            { ...request, signal: timeoutControl.signal }
+          );
+          try {
+            return await fetcher(fallbackPrepared.url, fallbackPrepared.init);
+          } catch (fallbackError) {
+            if (
+              timeoutControl.didTimeout() ||
+              !isFetchNetworkError(fallbackError)
+            ) {
+              throw fallbackError;
+            }
+          }
+        }
       }
       throw error;
     } finally {
