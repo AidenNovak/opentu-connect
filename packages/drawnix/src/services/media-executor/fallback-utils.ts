@@ -285,6 +285,7 @@ export async function cacheRemoteUrl(
   options?: {
     source?: 'AI_GENERATED' | 'PLAYBACK_CACHE';
     forceRemoteCache?: boolean;
+    returnLocalCacheUrl?: boolean;
     extraMetadata?: Record<string, unknown>;
   }
 ): Promise<string> {
@@ -324,8 +325,13 @@ export async function cacheRemoteUrl(
         return normalizedUrl;
       }
 
-      await unifiedCacheService.cacheMediaFromBlob(
-        normalizedUrl,
+      const suffix = index !== undefined ? `_${index}` : '';
+      const cacheTargetUrl = options?.returnLocalCacheUrl
+        ? `/__aitu_cache__/${mediaType}/${taskId}${suffix}.${format}`
+        : normalizedUrl;
+
+      const cacheUrl = await unifiedCacheService.cacheMediaFromBlob(
+        cacheTargetUrl,
         blob,
         mediaType,
         {
@@ -334,7 +340,9 @@ export async function cacheRemoteUrl(
           ...options?.extraMetadata,
         }
       );
-      return normalizedUrl;
+      return options?.returnLocalCacheUrl && cacheUrl
+        ? cacheUrl
+        : normalizedUrl;
     } catch (error) {
       console.warn(
         '[cacheRemoteUrl] Remote media cache failed, using original URL:',
