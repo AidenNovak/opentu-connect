@@ -351,7 +351,7 @@ export const insertImageFromUrl = async (
       'image',
       'png',
       undefined,
-      { forceRemoteCache: true }
+      { forceRemoteCache: true, returnLocalCacheUrl: true }
     );
     if (cachedUrl !== resolvedUrl) {
       resolvedUrl = cachedUrl;
@@ -542,7 +542,7 @@ function updateImageSizeAfterLoad(
         naturalWidth,
         naturalHeight
       );
-      
+
       let newWidth = displayDimensions.width;
       let newHeight = displayDimensions.height;
 
