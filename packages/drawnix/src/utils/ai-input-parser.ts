@@ -135,7 +135,7 @@ export interface ParsedGenerationParams {
   /** 时长参数（视频） */
   duration?: string;
   /** 额外参数（如 seedream_quality, aspect_ratio 等，透传给 adapter） */
-  extraParams?: Record<string, string>;
+  extraParams?: Record<string, unknown>;
   /** 原始解析结果 */
   parseResult: ParseResult;
   /** 是否有额外内容（除模型/参数/数量外） */
