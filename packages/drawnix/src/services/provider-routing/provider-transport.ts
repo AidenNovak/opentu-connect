@@ -27,7 +27,8 @@ function rewriteBaseUrlForDevProxy(baseUrl: string): string {
   try {
     const isDev =
       typeof import.meta !== 'undefined' &&
-      (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
+      (import.meta as { env?: { DEV?: boolean; MODE?: string } }).env?.DEV &&
+      (import.meta as { env?: { MODE?: string } }).env?.MODE !== 'test';
     if (!isDev) return baseUrl;
     if (!/^https?:\/\//i.test(baseUrl)) return baseUrl;
 

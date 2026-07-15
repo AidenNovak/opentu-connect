@@ -377,7 +377,11 @@ export function convertDirectGenerationToWorkflow(
         videoArgs.referenceImages = referenceImages;
       }
       // 透传额外参数（如 ratio）
-      const videoParams: Record<string, string> = { ...(extraParams || {}) };
+      const videoParams = Object.fromEntries(
+        Object.entries(extraParams || {}).filter(
+          (entry): entry is [string, string] => typeof entry[1] === 'string'
+        )
+      );
       if (
         modelId === 'happyhorse-1.0-video-edit' &&
         selection?.videos?.[0] &&
