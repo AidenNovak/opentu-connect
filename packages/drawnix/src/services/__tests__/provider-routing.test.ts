@@ -161,6 +161,77 @@ describe('provider routing', () => {
     expect(fallbackPlan.binding.id).toBe('gpt-generation');
   });
 
+  it('keeps an explicit manual binding ahead of schema and async preferences', () => {
+    const planner = new InvocationPlanner(
+      createRepositories({
+        profiles: [
+          {
+            id: 'provider-a',
+            name: 'Provider A',
+            providerType: 'custom',
+            baseUrl: 'https://custom.example.com',
+            apiKey: 'key-a',
+            authType: 'bearer',
+            preferAsyncImageEndpoint: true,
+          },
+        ],
+        bindings: [
+          {
+            id: 'custom-http-image',
+            profileId: 'provider-a',
+            modelId: 'custom-image',
+            operation: 'image',
+            protocol: 'custom-http',
+            requestSchema: 'custom-http',
+            responseSchema: 'custom-http.image',
+            submitPath: '/render',
+            priority: 900,
+            confidence: 'high',
+            source: 'manual',
+          },
+          {
+            id: 'inferred-edit',
+            profileId: 'provider-a',
+            modelId: 'custom-image',
+            operation: 'image',
+            protocol: 'openai.images.edits',
+            requestSchema: 'openai.image.gpt-edit-form',
+            responseSchema: 'openai.image.data',
+            submitPath: '/images/edits',
+            priority: 320,
+            confidence: 'high',
+            source: 'template',
+          },
+          {
+            id: 'inferred-async',
+            profileId: 'provider-a',
+            modelId: 'custom-image',
+            operation: 'image',
+            protocol: 'openai.async.media',
+            requestSchema: 'openai.async.image.form',
+            responseSchema: 'openai.async.task',
+            submitPath: '/videos',
+            priority: 300,
+            confidence: 'high',
+            source: 'template',
+          },
+        ],
+      })
+    );
+
+    const plan = planner.plan({
+      operation: 'image',
+      modelRef: {
+        profileId: 'provider-a',
+        modelId: 'custom-image',
+      },
+      preferredRequestSchema: 'openai.image.gpt-edit-form',
+    });
+
+    expect(plan.binding.id).toBe('custom-http-image');
+    expect(plan.binding.protocol).toBe('custom-http');
+  });
+
   it('keeps same model ids separate across different providers', () => {
     const planner = new InvocationPlanner(
       createRepositories({
@@ -320,37 +391,160 @@ describe('provider routing', () => {
     );
   });
 
-  it('does not retry non-Tuzi provider requests against Tuzi endpoints', async () => {
-    const fetcher = vi.fn(async () => {
-      throw new TypeError('Failed to fetch');
-    });
+  it('falls back to another tuzi endpoint on transient gateway responses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          data: {
+            api_address_list: [
+              { url: 'https://api.tu-zi.com' },
+              { url: 'https://apius.tu-zi.com' },
+            ],
+          },
+        })
+      )
+    );
 
-    await expect(
-      providerTransport.send(
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response('status_code=504, bad response status code 504', {
+          status: 504,
+        })
+      )
+      .mockResolvedValueOnce(Response.json({ ok: true }));
+
+    try {
+      const response = await providerTransport.send(
         {
-          profileId: 'provider-openai',
-          profileName: 'OpenAI',
+          profileId: 'provider-tuzi',
+          profileName: 'Tuzi',
           providerType: 'openai-compatible',
-          baseUrl: 'https://api.openai.com/v1',
-          apiKey: 'openai-secret',
+          baseUrl: 'https://api.tu-zi.com/v1',
+          apiKey: 'secret',
           authType: 'bearer',
         },
         {
-          path: '/models',
+          path: '/images/generations',
+          method: 'POST',
+          body: '{}',
           fetcher,
         }
-      )
-    ).rejects.toThrow('Failed to fetch');
+      );
 
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(fetcher).toHaveBeenCalledWith(
-      'https://api.openai.com/v1/models',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer openai-secret',
-        }),
-      })
+      expect(response.ok).toBe(true);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(String(fetcher.mock.calls[1]?.[0])).toBe(
+        'https://apius.tu-zi.com/v1/images/generations'
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('returns deterministic model_not_found responses without switching Tuzi endpoints', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          data: {
+            api_address_list: [
+              { url: 'https://api.tu-zi.com' },
+              { url: 'https://apius.tu-zi.com' },
+            ],
+          },
+        })
+      )
     );
+
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'model_not_found',
+            message: '分组 default 下模型 dall-e 无可用渠道',
+          },
+        }),
+        { status: 503, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    try {
+      const response = await providerTransport.send(
+        {
+          profileId: 'provider-tuzi',
+          profileName: 'Tuzi',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.tu-zi.com/v1',
+          apiKey: 'secret',
+          authType: 'bearer',
+        },
+        {
+          path: '/images/generations',
+          method: 'POST',
+          body: '{}',
+          fetcher,
+        }
+      );
+
+      expect(response.status).toBe(503);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('falls back to another tuzi endpoint on remote protocol termination', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          data: {
+            api_address_list: [
+              { url: 'https://api.tu-zi.com' },
+              { url: 'https://apius.tu-zi.com' },
+            ],
+          },
+        })
+      )
+    );
+
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(
+        new Error(
+          'UpstreamRemoteProtocolError: <ConnectionTerminated error_code:ErrorCodes.NO_ERROR, last_stream_id:1, additional_data:None> | cause=RemoteProtocolError: <ConnectionTerminated error_code:ErrorCodes.NO_ERROR, last_stream_id:1, additional_data:None> | channel=CH#18 兔子 | url=https://api.tu-zi.com | body=2198889bytes | send_took=59866ms | active_upstream=2 | elapsed=61101ms'
+        )
+      )
+      .mockResolvedValueOnce(Response.json({ ok: true }));
+
+    try {
+      const response = await providerTransport.send(
+        {
+          profileId: 'provider-tuzi',
+          profileName: 'Tuzi',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.tu-zi.com/v1',
+          apiKey: 'secret',
+          authType: 'bearer',
+        },
+        {
+          path: '/images/generations',
+          method: 'POST',
+          body: '{}',
+          fetcher,
+        }
+      );
+
+      expect(response.ok).toBe(true);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(String(fetcher.mock.calls[1]?.[0])).toBe(
+        'https://apius.tu-zi.com/v1/images/generations'
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('infers different bindings for the same model across provider types', () => {
@@ -462,6 +656,8 @@ describe('provider routing', () => {
       'tuzi.image.gpt-generation-json',
       'tuzi.image.gpt-edit-json',
     ]);
+    expect(tuziBindings[1]?.protocol).toBe('openai.images.edits');
+    expect(tuziBindings[1]?.submitPath).toBe('/images/edits');
     expect(tuziBindings[0]?.metadata?.image).toMatchObject({
       action: 'generation',
       imageApiCompatibility: 'auto',
@@ -584,6 +780,7 @@ describe('provider routing', () => {
       'tuzi.image.gpt-generation-json',
       'tuzi.image.gpt-edit-json',
     ]);
+    expect(bindings[1]?.submitPath).toBe('/images/edits');
     expect(bindings[0]?.metadata?.image).toMatchObject({
       imageApiCompatibility: 'auto',
       resolvedImageApiCompatibility: 'tuzi-gpt-image',
@@ -659,6 +856,7 @@ describe('provider routing', () => {
       'tuzi.image.gpt-generation-json',
       'tuzi.image.gpt-edit-json',
     ]);
+    expect(bindings[1]?.submitPath).toBe('/images/edits');
   });
 
   it('prefers pricing async-image /v1/videos binding for image models', () => {

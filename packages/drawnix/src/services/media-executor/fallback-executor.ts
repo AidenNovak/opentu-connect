@@ -24,6 +24,7 @@ import {
   resolveInvocationRoute,
   type ModelRef,
 } from '../../utils/settings-manager';
+import { getDefaultImageModel } from '../../constants/model-config';
 import {
   providerTransport,
   resolveInvocationPlanFromRoute,
@@ -41,6 +42,13 @@ import {
   callApiWithRetry,
   callGoogleGenerateContentRaw,
 } from '../../utils/gemini-api/apiCalls';
+import {
+  buildManualHttpRequestPayload,
+  buildManualHttpVariables,
+  getManualHttpTemplate,
+  normalizeManualTextResponse,
+  renderTemplate,
+} from '../provider-routing/manual-http-template';
 import type { GeminiMessage as UnifiedGeminiMessage } from '../../utils/gemini-api/types';
 import {
   classifyApiCredentialError,
@@ -48,11 +56,7 @@ import {
 } from '../../utils/api-auth-error-event';
 import { extractTextContent, parseToolCalls } from '../agent/tool-parser';
 import { unifiedCacheService } from '../unified-cache-service';
-import {
-  submitVideoGeneration,
-  recoverImageByRequestId,
-} from '../media-api';
-import { emitImageRequestIdDebugLog } from '../media-api/request-id-debug';
+import { submitVideoGeneration } from '../media-api';
 import {
   extractPromptFromMessages,
   buildImageRequestBody,
@@ -76,7 +80,6 @@ import {
   resolveLegacyTaskInvocationRouteModel,
   shouldUseStrictTaskInvocationRoute,
 } from '../task-invocation-route';
-import { normalizeLlmTextContent } from '../../utils/llm-json-extractor';
 
 function inferAuthTypeFromRoute(
   route: ReturnType<typeof resolveInvocationRoute>
@@ -102,22 +105,6 @@ function buildProviderContext(config: {
       authType: config.authType || 'bearer',
       extraHeaders: config.extraHeaders,
     }
-  );
-}
-
-function generateRequestIdForImage(): string {
-  const g = globalThis as { crypto?: { randomUUID?: () => string } };
-  if (typeof g.crypto?.randomUUID === 'function') {
-    return g.crypto.randomUUID();
-  }
-  return `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function isTimeoutErrorForRecover(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (error.name === 'TimeoutError' ||
-      /Request timeout|请求超时/.test(error.message))
   );
 }
 
@@ -289,7 +276,12 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     options?.onProgress?.({ progress: 0, phase: 'submitting' });
 
     const startTime = Date.now();
-    const modelName = model || config.imageConfig.modelName;
+    const modelName =
+      modelRef?.modelId ||
+      config.imageConfig.binding?.modelId ||
+      config.imageConfig.modelName ||
+      model ||
+      getDefaultImageModel();
 
     // 异步图片模型：使用 /v1/videos 接口（仅当 binding 为 async-image 时）
     const imagePlan = resolveInvocationPlanFromRoute(
@@ -356,20 +348,11 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       );
     }
 
-    // 为本次请求生成 X-Request-Id，用于超时时通过 /log/get-request 找回结果
-    const requestId = generateRequestIdForImage();
-    emitImageRequestIdDebugLog(requestId, {
-      model: modelName,
-      endpoint: '/images/generations',
-      source: 'fallbackExecutor',
-    });
-
     // 开始记录 LLM API 调用
     const logId = startLLMApiLog({
       endpoint: '/images/generations',
       model: modelName,
       taskType: 'image',
-      requestId,
       prompt,
       hasReferenceImages: !!referenceImages && referenceImages.length > 0,
       referenceImageCount: referenceImages?.length,
@@ -404,82 +387,49 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
       options?.onProgress?.({ progress: 10, phase: 'submitting' });
 
-      let result;
-      let httpStatus = 200;
-      try {
-        // 直接调用 API
-        const response = await providerTransport.send(
-          buildProviderContext(config.imageConfig),
-          {
-            path: '/images/generations',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestBody),
-            signal: options?.signal,
-            timeoutMs: IMAGE_GENERATION_TIMEOUT_MS,
-            requestId,
-          }
+      // 直接调用 API
+      const response = await providerTransport.send(
+        buildProviderContext(config.imageConfig),
+        {
+          path: '/images/generations',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+          signal: options?.signal,
+          timeoutMs: IMAGE_GENERATION_TIMEOUT_MS,
+        }
+      );
+
+      if (!response.ok) {
+        const duration = Date.now() - startTime;
+        const errorBody = await response
+          .text()
+          .catch(
+            () => `HTTP ${response.status} ${response.statusText || 'Error'}`
+          );
+        failLLMApiLog(logId, {
+          httpStatus: response.status,
+          duration,
+          errorMessage: errorBody.substring(0, 500),
+        });
+        throw new Error(
+          `Image generation failed: ${response.status} - ${errorBody.substring(
+            0,
+            200
+          )}`
         );
-
-        if (!response.ok) {
-          const duration = Date.now() - startTime;
-          const errorBody = await response
-            .text()
-            .catch(
-              () => `HTTP ${response.status} ${response.statusText || 'Error'}`
-            );
-          failLLMApiLog(logId, {
-            httpStatus: response.status,
-            duration,
-            errorMessage: errorBody.substring(0, 500),
-          });
-          throw new Error(
-            `Image generation failed: ${response.status} - ${errorBody.substring(
-              0,
-              200
-            )}`
-          );
-        }
-
-        options?.onProgress?.({ progress: 80, phase: 'downloading' });
-
-        const data = await response.json();
-        result = parseImageResponse(data);
-        httpStatus = response.status;
-      } catch (sendError) {
-        // 超时兜底：尝试通过 /log/get-request 找回已经生成成功的结果
-        if (isTimeoutErrorForRecover(sendError)) {
-          console.warn(
-            `[FallbackMediaExecutor] 生图请求超时，尝试通过 X-Request-Id 找回: ${requestId}`
-          );
-          try {
-            result = await recoverImageByRequestId(
-              requestId,
-              config.imageConfig,
-              options?.signal
-            );
-            console.info(
-              `[FallbackMediaExecutor] ✅ 通过 X-Request-Id 找回结果成功: ${requestId}`
-            );
-          } catch (recoverError) {
-            console.error(
-              `[FallbackMediaExecutor] ❌ 通过 X-Request-Id 找回结果失败: ${requestId}`,
-              recoverError
-            );
-            // 找回失败，抛出原始超时错误交给外层 catch 处理
-            throw sendError;
-          }
-        } else {
-          throw sendError;
-        }
       }
 
+      options?.onProgress?.({ progress: 80, phase: 'downloading' });
+
+      const data = await response.json();
+      const result = parseImageResponse(data);
       const duration = Date.now() - startTime;
-      // 记录成功（找回场景也走这里）
+      // 记录成功
       completeLLMApiLog(logId, {
-        httpStatus,
+        httpStatus: response.status,
         duration,
         resultType: 'image',
         resultCount: 1,
@@ -994,9 +944,7 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
       options?.onProgress?.({ progress: 80 });
 
-      const fullResponse = normalizeLlmTextContent(
-        data.choices?.[0]?.message?.content
-      );
+      const fullResponse = data.choices?.[0]?.message?.content || '';
       const elapsedTime = Date.now() - startTime;
 
       // 记录成功
@@ -1132,73 +1080,151 @@ export class FallbackMediaExecutor implements IMediaExecutor {
         await taskStorageWriter.updateProgress(taskId, 30, 'submitting');
       }
 
-      const data =
-        config.textConfig.protocol === 'google.generateContent'
-          ? await callGoogleGenerateContentRaw(config.textConfig, messages, {
-              stream: false,
+      const manualHttpTemplate = getManualHttpTemplate(
+        config.textConfig.binding?.metadata
+      );
+      const manualVariables = manualHttpTemplate
+        ? buildManualHttpVariables({
+            model: modelName,
+            modelRef: config.textConfig.binding?.modelId
+              ? {
+                  profileId: config.textConfig.binding.profileId,
+                  modelId: config.textConfig.binding.modelId,
+                }
+              : null,
+            prompt: normalizedPrompt,
+            messages,
+            images: referenceImages,
+            params: extraParams,
+          })
+        : null;
+      const manualPayload =
+        manualHttpTemplate && manualVariables
+          ? await buildManualHttpRequestPayload(
+              manualHttpTemplate,
+              manualVariables
+            )
+          : null;
+      const data = manualHttpTemplate
+        ? await providerTransport
+            .send(buildProviderContext(config.textConfig), {
+              path: renderTemplate(
+                config.textConfig.binding?.submitPath || '/chat/completions',
+                manualVariables || {}
+              ) as string,
+              baseUrlStrategy: config.textConfig.binding?.baseUrlStrategy,
+              method:
+                manualHttpTemplate.method ||
+                (manualPayload?.body === undefined ? 'GET' : 'POST'),
+              headers: {
+                ...(manualPayload?.contentType
+                  ? { 'Content-Type': manualPayload.contentType }
+                  : {}),
+                ...(!manualPayload?.contentType &&
+                manualPayload?.body !== undefined &&
+                !(manualPayload.body instanceof FormData)
+                  ? { 'Content-Type': 'application/json' }
+                  : {}),
+                ...(renderTemplate(
+                  manualHttpTemplate.headers || {},
+                  manualVariables || {}
+                ) as Record<string, string>),
+              },
+              body: manualPayload?.body,
               signal: options?.signal,
-              generationConfig: {
+            })
+            .then(async (response) => {
+              if (!response.ok) {
+                const rawError = await readResponseTextPreview(response);
+                const providerMessage = extractProviderErrorMessage(rawError);
+                throw new Error(
+                  `HTTP ${response.status}: ${
+                    providerMessage ||
+                    response.statusText ||
+                    'Text generation failed'
+                  }`
+                );
+              }
+              const rawText = await response.text();
+              let payload: unknown = rawText;
+              if (rawText.trim()) {
+                try {
+                  payload = JSON.parse(rawText);
+                } catch {
+                  payload = rawText;
+                }
+              }
+              return normalizeManualTextResponse(
+                payload,
+                manualHttpTemplate.responsePaths
+              );
+            })
+        : config.textConfig.protocol === 'google.generateContent'
+        ? await callGoogleGenerateContentRaw(config.textConfig, messages, {
+            stream: false,
+            signal: options?.signal,
+            generationConfig: {
+              ...(toNumber(extraParams?.temperature) !== undefined
+                ? { temperature: toNumber(extraParams?.temperature) }
+                : {}),
+              ...(toNumber(extraParams?.top_p) !== undefined
+                ? { topP: toNumber(extraParams?.top_p) }
+                : {}),
+              ...(toNumber(extraParams?.max_tokens) !== undefined
+                ? { maxOutputTokens: toNumber(extraParams?.max_tokens) }
+                : {}),
+              ...(typeof extraParams?.response_mime_type === 'string' &&
+              extraParams.response_mime_type.trim()
+                ? {
+                    responseMimeType: extraParams.response_mime_type.trim(),
+                  }
+                : {}),
+            },
+          })
+        : await providerTransport
+            .send(buildProviderContext(config.textConfig), {
+              path:
+                config.textConfig.binding?.submitPath || '/chat/completions',
+              baseUrlStrategy: config.textConfig.binding?.baseUrlStrategy,
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: modelName,
+                messages,
+                stream: false,
                 ...(toNumber(extraParams?.temperature) !== undefined
                   ? { temperature: toNumber(extraParams?.temperature) }
                   : {}),
                 ...(toNumber(extraParams?.top_p) !== undefined
-                  ? { topP: toNumber(extraParams?.top_p) }
+                  ? { top_p: toNumber(extraParams?.top_p) }
                   : {}),
                 ...(toNumber(extraParams?.max_tokens) !== undefined
-                  ? { maxOutputTokens: toNumber(extraParams?.max_tokens) }
+                  ? { max_tokens: toNumber(extraParams?.max_tokens) }
                   : {}),
-                ...(typeof extraParams?.response_mime_type === 'string' &&
-                extraParams.response_mime_type.trim()
-                  ? {
-                      responseMimeType: extraParams.response_mime_type.trim(),
-                    }
+                ...(typeof extraParams?.response_format === 'object'
+                  ? { response_format: extraParams.response_format }
                   : {}),
-              },
+              }),
+              signal: options?.signal,
             })
-          : await providerTransport
-              .send(buildProviderContext(config.textConfig), {
-                path: '/chat/completions',
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  model: modelName,
-                  messages,
-                  stream: false,
-                  ...(toNumber(extraParams?.temperature) !== undefined
-                    ? { temperature: toNumber(extraParams?.temperature) }
-                    : {}),
-                  ...(toNumber(extraParams?.top_p) !== undefined
-                    ? { top_p: toNumber(extraParams?.top_p) }
-                    : {}),
-                  ...(toNumber(extraParams?.max_tokens) !== undefined
-                    ? { max_tokens: toNumber(extraParams?.max_tokens) }
-                    : {}),
-                  ...(typeof extraParams?.response_format === 'object'
-                    ? { response_format: extraParams.response_format }
-                    : {}),
-                }),
-                signal: options?.signal,
-              })
-              .then(async (response) => {
-                if (!response.ok) {
-                  const rawError = await readResponseTextPreview(response);
-                  const providerMessage = extractProviderErrorMessage(rawError);
-                  throw new Error(
-                    `HTTP ${response.status}: ${
-                      providerMessage ||
-                      response.statusText ||
-                      'Text generation failed'
-                    }`
-                  );
-                }
-                return response.json();
-              });
+            .then(async (response) => {
+              if (!response.ok) {
+                const rawError = await readResponseTextPreview(response);
+                const providerMessage = extractProviderErrorMessage(rawError);
+                throw new Error(
+                  `HTTP ${response.status}: ${
+                    providerMessage ||
+                    response.statusText ||
+                    'Text generation failed'
+                  }`
+                );
+              }
+              return response.json();
+            });
 
-      const fullResponse = normalizeLlmTextContent(
-        data.choices?.[0]?.message?.content
-      );
+      const fullResponse = data.choices?.[0]?.message?.content || '';
       options?.onProgress?.({ progress: 100 });
       if (taskId) {
         await taskStorageWriter.completeTask(taskId, {
