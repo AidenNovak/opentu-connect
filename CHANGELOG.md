@@ -1,3 +1,26 @@
+## 1.0.4 (2026-07-18)
+
+### 🚀 Features
+
+- 完善图片请求 ID 找回与失败重试体验 ([071d3986](https://github.com/ljquan/aitu/commit/071d3986))
+
+### 🩹 Fixes
+
+- 下线 jsDelivr/npm CDN 发布方案，改用自建服务器直发 ([b0631900](https://github.com/ljquan/aitu/commit/b0631900))
+- preserve remote media cache URL contract ([d4541c8c](https://github.com/ljquan/aitu/commit/d4541c8c))
+
+### 🔧 Chores
+
+- 发布v1.0.3并完成多项优化修复 ([4fd3488e](https://github.com/ljquan/aitu/commit/4fd3488e))
+- 修复 tuzi-api 端点路由兜底 ([fe000ed1](https://github.com/ljquan/aitu/commit/fe000ed1))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+- liangkaijun <2290804689@qq.com>
+- 水滴鱼 <shuidiyu@shuidiyudeMacBook-Neo.local>
+
 ## 1.0.3 (2026-07-18)
 
 ### 🔧 Chores
