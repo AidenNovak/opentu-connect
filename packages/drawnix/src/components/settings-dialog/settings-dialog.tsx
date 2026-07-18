@@ -1052,9 +1052,7 @@ export const SettingsDialog = ({
   };
 
   useEffect(() => {
-    if (!appState.openSettings || !isSelectedTuziProfile) {
-      setTuziApiEndpointOptions([]);
-      setTuziApiEndpointLoadError('');
+    if (!appState.openSettings) {
       return;
     }
 
@@ -1127,7 +1125,7 @@ export const SettingsDialog = ({
     if (pendingProviderIntent?.action === 'create') {
       applyProviderNavigationIntent(pendingProviderIntent, nextProfiles);
     }
-  }, [appState.openSettings, isSelectedTuziProfile]);
+  }, [appState.openSettings]);
 
   useEffect(() => {
     if (!selectedProfileId && profilesDraft[0]) {
