@@ -7,6 +7,7 @@ import {
   supportsTextBindingImageInput,
 } from '../provider-routing';
 import { providerTransport } from '../provider-routing';
+import { canAttachProviderRequestIdHeader } from '../provider-routing';
 import type {
   InvocationPlannerRepositories,
   ProviderModelBinding,
@@ -279,6 +280,129 @@ describe('provider routing', () => {
     expect(prepared.headers['Content-Type']).toBe('application/json');
   });
 
+  it('collapses a duplicated API version at the URL join boundary', () => {
+    const prepared = providerTransport.prepareRequest(
+      {
+        profileId: 'provider-tuzi',
+        profileName: 'Tuzi',
+        providerType: 'openai-compatible',
+        baseUrl: 'https://api.tu-zi.com/v1',
+        apiKey: 'secret',
+        authType: 'bearer',
+      },
+      {
+        path: '/v1/images/generations',
+        method: 'POST',
+      }
+    );
+
+    expect(prepared.url).toBe('https://api.tu-zi.com/v1/images/generations');
+  });
+
+  it('keeps different API version segments when joining provider URLs', () => {
+    const prepared = providerTransport.prepareRequest(
+      {
+        profileId: 'provider-custom',
+        profileName: 'Custom Provider',
+        providerType: 'custom',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'secret',
+        authType: 'bearer',
+      },
+      {
+        path: '/v1beta/models/test:generateContent',
+      }
+    );
+
+    expect(prepared.url).toBe(
+      'https://api.example.com/v1/v1beta/models/test:generateContent'
+    );
+  });
+
+  it('collapses an exact duplicate API version path', () => {
+    const prepared = providerTransport.prepareRequest(
+      {
+        profileId: 'provider-custom',
+        profileName: 'Custom Provider',
+        providerType: 'custom',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'secret',
+        authType: 'bearer',
+      },
+      {
+        path: '/v1',
+      }
+    );
+
+    expect(prepared.url).toBe('https://api.example.com/v1');
+  });
+
+  it('adds /v1 when a versioned API receives a provider origin', () => {
+    const prepared = providerTransport.prepareRequest(
+      {
+        profileId: 'provider-tuzi',
+        profileName: 'Tuzi',
+        providerType: 'openai-compatible',
+        baseUrl: 'https://api.tu-zi.com',
+        apiKey: 'secret',
+        authType: 'bearer',
+      },
+      {
+        path: '/images/generations',
+        baseUrlStrategy: 'ensure-v1',
+      }
+    );
+
+    expect(prepared.url).toBe('https://api.tu-zi.com/v1/images/generations');
+  });
+
+  it('omits X-Request-Id for custom cross-origin providers', () => {
+    const prepared = providerTransport.prepareRequest(
+      {
+        profileId: 'provider-custom',
+        profileName: 'Custom Provider',
+        providerType: 'openai-compatible',
+        baseUrl: 'https://images.example.com/v1',
+        apiKey: 'secret',
+        authType: 'bearer',
+      },
+      {
+        path: '/images/generations',
+        method: 'POST',
+        requestId: 'request-id-that-would-trigger-preflight',
+      }
+    );
+
+    expect(prepared.headers['X-Request-Id']).toBeUndefined();
+  });
+
+  it('only enables Tuzi request-id recovery for same-origin requests', () => {
+    const context: ProviderProfileSnapshot = {
+      id: 'provider-tuzi',
+      name: 'Tuzi',
+      providerType: 'openai-compatible',
+      baseUrl: 'https://api.tu-zi.com/v1',
+      apiKey: 'secret',
+      authType: 'bearer',
+    };
+    const request = { path: '/images/generations' };
+
+    expect(
+      canAttachProviderRequestIdHeader(
+        context,
+        request,
+        'https://opentu.example.com'
+      )
+    ).toBe(false);
+    expect(
+      canAttachProviderRequestIdHeader(
+        context,
+        request,
+        'https://api.tu-zi.com'
+      )
+    ).toBe(true);
+  });
+
   it('prepares query-auth transport requests', () => {
     const prepared = providerTransport.prepareRequest(
       {
@@ -351,6 +475,101 @@ describe('provider routing', () => {
         }),
       })
     );
+  });
+
+  it('retries Tuzi image 404 responses on a trusted fallback endpoint', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: {
+                api_address_list: [
+                  { url: 'https://api.tu-zi.com' },
+                  { url: 'https://apius.tu-zi.com' },
+                ],
+              },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+      )
+    );
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response('<!doctype html><title>Not Found</title>', {
+          status: 404,
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ url: 'fallback.png' }] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+
+    try {
+      const response = await providerTransport.send(
+        {
+          profileId: 'provider-tuzi',
+          profileName: 'Tuzi',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.tu-zi.com/v1',
+          apiKey: 'secret',
+          authType: 'bearer',
+        },
+        {
+          path: '/images/generations',
+          baseUrlStrategy: 'ensure-v1',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'gpt-image-2', prompt: 'test' }),
+          fetcher,
+        }
+      );
+
+      expect(response.status).toBe(200);
+      expect(fetcher).toHaveBeenNthCalledWith(
+        1,
+        'https://api.tu-zi.com/v1/images/generations',
+        expect.any(Object)
+      );
+      expect(fetcher).toHaveBeenNthCalledWith(
+        2,
+        'https://apius.tu-zi.com/v1/images/generations',
+        expect.any(Object)
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('treats trusted Tuzi alternate domains as Tuzi GPT Image providers', () => {
+    const model: ModelConfig = {
+      id: 'gpt-image-2',
+      label: 'GPT Image 2',
+      type: 'image',
+      vendor: ModelVendor.GPT,
+    };
+
+    const bindings = inferBindingsForProviderModel(
+      {
+        id: 'provider-tuzi-alt',
+        name: 'Tuzi Alternate',
+        providerType: 'openai-compatible',
+        baseUrl: 'https://api.ourzhishi.top/v1',
+        apiKey: 'secret',
+        authType: 'bearer',
+        imageApiCompatibility: 'auto',
+      },
+      model
+    );
+
+    expect(bindings.map((binding) => binding.requestSchema)).toEqual([
+      'tuzi.image.gpt-generation-json',
+      'tuzi.image.gpt-edit-json',
+    ]);
   });
 
   it('infers different bindings for the same model across provider types', () => {
