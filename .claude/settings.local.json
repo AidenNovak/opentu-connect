@@ -28,7 +28,13 @@
       "Bash(git apply *)",
       "Bash(echo \"exit: $?\")",
       "Bash(git status *)",
-      "Bash(cd *)"
+      "Bash(cd *)",
+      "Bash(ssh:*)",
+      "Bash(ip addr show)",
+      "Bash(openssl x509:*)",
+      "Bash(certbot certonly:*)",
+      "Bash(getent hosts:*)",
+      "Bash(curl:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
