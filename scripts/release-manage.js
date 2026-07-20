@@ -221,8 +221,8 @@ function parseCliArgs(argv) {
       options.bumpIfExists = arg.split('=')[1];
       continue;
     }
-    if (arg.startsWith('--version=')) {
-      options.version = arg.split('=')[1];
+    if (arg.startsWith('--version=') || arg.startsWith('--v=')) {
+      options.version = arg.split('=').slice(1).join('=');
       continue;
     }
     positional.push(arg);
@@ -231,7 +231,7 @@ function parseCliArgs(argv) {
   let command = 'deploy';
   if (
     positional[0] &&
-    ['deploy', 'activate', 'rollback', 'list', 'current'].includes(positional[0])
+    ['deploy', 'activate', 'rollback', 'promote', 'list', 'current'].includes(positional[0])
   ) {
     command = positional.shift();
   }
@@ -501,12 +501,59 @@ function listRelease(config, options) {
   runRemoteCommand(config, `${shellEscape(config.RELEASE_MANAGE_SCRIPT)} list`);
 }
 
+function getRemoteProductionVersion(config) {
+  const command = `readlink -f ${shellEscape(
+    path.posix.join(config.RELEASES_DIR, 'production')
+  )} | xargs -r basename`;
+  return runRemoteCommand(config, command, { captureOutput: true });
+}
+
+function promoteRelease(config, options) {
+  let version = options.version;
+  if (!version) {
+    version = getRemoteCurrentVersion(config);
+    if (!version) {
+      throw new Error('无法确定当前预发布版本，请通过 --version=x.x.x 指定');
+    }
+  }
+
+  const productionVersion = getRemoteProductionVersion(config);
+  if (productionVersion === version) {
+    console.log(`ℹ️  生产环境已是 ${version}，无需操作`);
+    return;
+  }
+
+  console.log(`🚀 推送到生产: ${version}`);
+  if (productionVersion) {
+    console.log(`   当前生产版本: ${productionVersion}`);
+  }
+
+  if (options.dryRun) {
+    console.log('🧪 dry-run: 将更新 production 符号链接');
+    return;
+  }
+
+  // 直接通过 SSH 更新 production 符号链接
+  const releasePath = path.posix.join(config.RELEASES_DIR, version);
+  const productionLink = path.posix.join(config.RELEASES_DIR, 'production');
+  runRemoteCommand(
+    config,
+    `test -d ${shellEscape(releasePath)} && ln -sfn ${shellEscape(releasePath)} ${shellEscape(productionLink)}`
+  );
+
+  console.log(`✅ 生产环境已切换到 ${version}`);
+}
+
 function currentRelease(config, options) {
   if (options.dryRun) {
     console.log('🧪 dry-run: 将查询当前版本');
     return;
   }
   runRemoteCommand(config, `${shellEscape(config.RELEASE_MANAGE_SCRIPT)} current`);
+  const productionVersion = getRemoteProductionVersion(config);
+  if (productionVersion) {
+    console.log(`生产版本 (opentu.ai): ${productionVersion}`);
+  }
 }
 
 function main() {
@@ -528,6 +575,9 @@ function main() {
       break;
     case 'rollback':
       rollbackRelease(config, options);
+      break;
+    case 'promote':
+      promoteRelease(config, options);
       break;
     case 'list':
       listRelease(config, options);

@@ -63,7 +63,7 @@
     "release:retry": "node scripts/release-manage.js --skip-build --overwrite",
     "release:force-bump": "node scripts/safe-version-bump.js patch && node scripts/release-manage.js",
     "release:dry": "node scripts/release-manage.js --dry-run --skip-build --bump-if-exists=patch",
-    "release:rollback": "node scripts/release-manage.js rollback",
+    "release:rollback": "node scripts/release-manage.js promote",
     "release:activate": "node scripts/release-manage.js activate",
     "release:list": "node scripts/release-manage.js list",
     "release:current": "node scripts/release-manage.js current",
