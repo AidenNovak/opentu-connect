@@ -175,6 +175,7 @@ import {
   type AIInputPrefillEventDetail,
 } from '../../services/ai-input-ui-events';
 import { normalizeKnowledgeContextRefs } from '../../services/generation-context-service';
+import { isAssetLibraryUrl } from '../../utils/virtual-media-url';
 import {
   ensureTaskIdInStepResult,
   extractTaskIdFromStepResult,
@@ -724,13 +725,11 @@ async function resolveBoundImageTarget(
     prompt = typeof task?.params?.prompt === 'string' ? task.params.prompt : '';
   }
 
-  if (!prompt) {
+  if (!prompt && !isAssetLibraryUrl(url)) {
     const task = await taskQueueService.findImageTaskByResultUrl(url);
     prompt = typeof task?.params?.prompt === 'string' ? task.params.prompt : '';
     generationTaskId = generationTaskId || task?.id;
   }
-
-  if (!prompt.trim()) return null;
 
   try {
     return {
@@ -1081,7 +1080,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(
 
     // 当前 WorkZone 元素 ID（用于在画布上显示工作流进度）
     const currentWorkZoneIdRef = useRef<string | null>(null);
-    const lastBoundImageTargetIdRef = useRef<string | null>(null);
+    const lastBoundImageTargetKeyRef = useRef<string | null>(null);
     const initialPreferences = loadAIInputPreferences();
 
     const bindCurrentImageAnchorTask = useCallback(
@@ -2920,21 +2919,38 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(
         setBoundImageTarget(target);
         setBoundInputLayoutTick((tick) => tick + 1);
         if (!target) {
-          lastBoundImageTargetIdRef.current = null;
+          lastBoundImageTargetKeyRef.current = null;
           setBoundTargetError(null);
           return;
         }
 
-        if (lastBoundImageTargetIdRef.current === target.elementId) {
+        const targetKey = [
+          target.elementId,
+          target.url,
+          target.prompt,
+          target.generationTaskId || '',
+          target.generationAnchorId || '',
+        ].join(':');
+        if (lastBoundImageTargetKeyRef.current === targetKey) {
           return;
         }
 
-        lastBoundImageTargetIdRef.current = target.elementId;
+        const previousElementId = lastBoundImageTargetKeyRef.current?.split(
+          ':',
+          1
+        )[0];
+        const isNewTarget = previousElementId !== target.elementId;
+        lastBoundImageTargetKeyRef.current = targetKey;
         setBoundTargetError(null);
         setGenerationType('image');
         setPrompt(target.prompt);
+        if (isNewTarget) {
+          setUploadedContent([]);
+          setKnowledgeContextRefs([]);
+        }
         setSelectedContent([]);
         selectedFrameRef.current = null;
+        suppressSelectionContentUrlsRef.current = new Set();
         setIsFocused(true);
         requestAnimationFrame(() => inputRef.current?.focus());
       },

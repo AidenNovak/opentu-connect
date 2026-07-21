@@ -139,6 +139,7 @@ vi.mock('../../services/media-result-handler', () => ({
 
 vi.mock('../../utils/selection-utils', () => ({
   getInsertionPointBelowBottommostElement: vi.fn(() => [100, 100]),
+  notifyAISelectionContentRefresh: vi.fn(),
 }));
 
 vi.mock('../../utils/frame-insertion-utils', () => ({

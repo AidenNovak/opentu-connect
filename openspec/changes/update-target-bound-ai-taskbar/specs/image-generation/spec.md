@@ -2,7 +2,7 @@
 
 ### Requirement: Regeneration SHALL Replace The Bound Image In Place
 
-The system SHALL create a new image task for an edited prompt and replace only the bound image target.
+The system SHALL create a new image task for an edited prompt and replace only the bound image target, including a regular uploaded image.
 
 #### Scenario: Regeneration succeeds
 
@@ -32,3 +32,12 @@ The system SHALL create a new image task for an edited prompt and replace only t
 - **GIVEN** a batch produced independently bound images
 - **WHEN** one image prompt is edited
 - **THEN** only that image SHALL be replaced
+
+#### Scenario: Generate from a regular uploaded image target
+
+- **GIVEN** a regular uploaded image is bound to the AI input bar
+- **AND** it has no generation task or anchor
+- **WHEN** the user submits a new prompt
+- **THEN** the system SHALL create a new image task for that target
+- **AND** SHALL NOT inherit a source task, anchor or prompt from another image
+- **AND** SHALL replace the uploaded image in place when generation succeeds

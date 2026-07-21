@@ -31,7 +31,10 @@ import {
   AUDIO_CARD_DEFAULT_HEIGHT,
   AUDIO_CARD_DEFAULT_WIDTH,
 } from '../data/audio';
-import { getInsertionPointBelowBottommostElement } from '../utils/selection-utils';
+import {
+  getInsertionPointBelowBottommostElement,
+  notifyAISelectionContentRefresh,
+} from '../utils/selection-utils';
 import { ImageGenerationAnchorTransforms } from '../plugins/with-image-generation-anchor';
 import { WorkZoneTransforms } from '../plugins/with-workzone';
 import {
@@ -268,6 +271,7 @@ function replaceGeneratedImageTarget(
     imageUrl,
     false
   );
+  notifyAISelectionContentRefresh();
 
   return {
     point: points?.[0],
