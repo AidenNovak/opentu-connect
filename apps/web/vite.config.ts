@@ -2,7 +2,6 @@
 import { defineConfig, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
-import type { OutputAsset, OutputBundle, OutputChunk } from 'rollup';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -11,9 +10,6 @@ import { visualizer } from 'rollup-plugin-visualizer';
 
 const require = createRequire(import.meta.url);
 const workspaceRoot = path.resolve(__dirname, '../..');
-
-const shouldRewriteEntryAssetsToCDN =
-  process.env.AITU_REWRITE_ENTRY_ASSETS_TO_CDN !== '0';
 
 // Read version from public/version.json
 const versionPath = path.resolve(__dirname, 'public/version.json');
@@ -52,6 +48,22 @@ const IDLE_PREFETCH_DEFAULTS = [
 type IdlePrefetchGroup = (typeof IDLE_PREFETCH_GROUPS)[number];
 
 type ManifestEntry = { url: string; revision: string };
+type OutputAsset = {
+  type: 'asset';
+  fileName: string;
+  source?: string | Uint8Array;
+};
+type OutputChunk = {
+  type: 'chunk';
+  fileName: string;
+  code: string;
+  facadeModuleId: string | null;
+  modules: Record<string, unknown>;
+  referencedFiles: string[];
+  imports: string[];
+  dynamicImports: string[];
+};
+type OutputBundle = Record<string, OutputAsset | OutputChunk>;
 type ViteOutputChunk = OutputChunk & {
   viteMetadata?: {
     importedCss?: Set<string>;
@@ -723,7 +735,7 @@ function isStartupRuntimeModule(id: string): boolean {
 }
 
 interface ManualChunkModuleInfo {
-  importers: string[];
+  importers: readonly string[];
 }
 
 interface ManualChunkContext {
@@ -966,7 +978,7 @@ function deferEntryAssetsPlugin(): Plugin {
         const assetTagPattern =
           /^[ \t]*(<script\b[^>]*type="module"[^>]*src="\.\/assets\/[^"]+"[^>]*><\/script>|<link\b[^>]*rel="stylesheet"[^>]*href="\.\/assets\/[^"]+"[^>]*>)\s*$/gm;
 
-        const strippedHtml = html.replace(assetTagPattern, (match, tag) => {
+        const strippedHtml = html.replace(assetTagPattern, (_match, tag) => {
           deferredTags.push(tag.trim());
           return '';
         });
@@ -987,170 +999,6 @@ function deferEntryAssetsPlugin(): Plugin {
   };
 }
 
-function rewriteEntryAssetsToCDNPlugin(): Plugin {
-  return {
-    name: 'rewrite-entry-assets-to-cdn',
-    apply: 'build',
-    closeBundle: {
-      sequential: true,
-      order: 'post',
-      async handler() {
-        const outDir = path.resolve(__dirname, '../../dist/apps/web');
-        const indexHtmlPath = path.join(outDir, 'index.html');
-
-        if (!fs.existsSync(indexHtmlPath)) {
-          return;
-        }
-
-        if (!shouldRewriteEntryAssetsToCDN) {
-          console.log(
-            '[EntryAssets] Keeping entry asset tags local because AITU_REWRITE_ENTRY_ASSETS_TO_CDN=0'
-          );
-          return;
-        }
-
-        const html = (await readFileWithFdRetry(
-          indexHtmlPath,
-          'utf8'
-        )) as string;
-        const cdnBaseUrl = `https://cdn.jsdelivr.net/npm/aitu-app@${appVersion}`;
-        let rewrittenCount = 0;
-
-        const rewriteAssetUrl = (localPath: string) => {
-          const [pathname, suffix = ''] = localPath.split(/([?#].*)/, 2);
-          return `${cdnBaseUrl}/${pathname.replace(/^\.\//, '')}${suffix}`;
-        };
-
-        const rewriteManagedLinkTag = (
-          beforeHref: string,
-          localHref: string,
-          afterHref: string
-        ) => {
-          const hasSelfClosingSlash = /\/\s*$/.test(afterHref);
-          const normalizedAfterHref = afterHref.replace(/\/\s*$/, '');
-          rewrittenCount += 1;
-          return `<link${beforeHref}href="${rewriteAssetUrl(
-            localHref
-          )}" data-local-href="${localHref}" data-cdn-fallback-managed="1"${normalizedAfterHref} onerror="window.__OPENTU_BOOT_ASSET_FALLBACK__&&window.__OPENTU_BOOT_ASSET_FALLBACK__(this)"${
-            hasSelfClosingSlash ? ' /' : ''
-          }>`;
-        };
-
-        let nextHtml = html.replace(
-          /<script\b([^>]*\btype="module"[^>]*)\bsrc="(\.\/assets\/[^"]+)"([^>]*)><\/script>/g,
-          (_match, beforeSrc, localSrc, afterSrc) => {
-            rewrittenCount += 1;
-            return `<script${beforeSrc}src="${rewriteAssetUrl(
-              localSrc
-            )}" data-local-src="${localSrc}" data-cdn-fallback-managed="1"${afterSrc} onerror="window.__OPENTU_BOOT_ASSET_FALLBACK__&&window.__OPENTU_BOOT_ASSET_FALLBACK__(this)"></script>`;
-          }
-        );
-
-        nextHtml = nextHtml.replace(
-          /<link\b([^>]*\brel="stylesheet"[^>]*)\bhref="(\.\/assets\/[^"]+)"([^>]*)>/g,
-          (_match, beforeHref, localHref, afterHref) =>
-            rewriteManagedLinkTag(beforeHref, localHref, afterHref)
-        );
-
-        nextHtml = nextHtml.replace(
-          /<link\b([^>]*\brel="(?:manifest|icon|apple-touch-icon)"[^>]*)\bhref="(\.\/[^"]+)"([^>]*)>/g,
-          (_match, beforeHref, localHref, afterHref) =>
-            rewriteManagedLinkTag(beforeHref, localHref, afterHref)
-        );
-
-        if (rewrittenCount === 0) {
-          return;
-        }
-
-        await writeFileWithFdRetry(indexHtmlPath, nextHtml);
-        console.log(
-          `[EntryAssets] Rewrote ${rewrittenCount} entry asset tag(s) to prefer CDN`
-        );
-      },
-    },
-  };
-}
-
-function rewriteManifestAssetsToCDNPlugin(): Plugin {
-  return {
-    name: 'rewrite-manifest-assets-to-cdn',
-    apply: 'build',
-    closeBundle: {
-      sequential: true,
-      order: 'post',
-      async handler() {
-        const outDir = path.resolve(__dirname, '../../dist/apps/web');
-        const manifestPath = path.join(outDir, 'manifest.json');
-
-        if (!fs.existsSync(manifestPath)) {
-          return;
-        }
-
-        if (!shouldRewriteEntryAssetsToCDN) {
-          console.log(
-            '[ManifestAssets] Keeping manifest asset urls local because AITU_REWRITE_ENTRY_ASSETS_TO_CDN=0'
-          );
-          return;
-        }
-
-        const manifest = JSON.parse(
-          (await readFileWithFdRetry(manifestPath, 'utf8')) as string
-        );
-        const cdnBaseUrl = `https://cdn.jsdelivr.net/npm/aitu-app@${appVersion}`;
-        let rewrittenCount = 0;
-
-        const rewriteManifestAssetUrl = (assetUrl: string) => {
-          if (
-            typeof assetUrl !== 'string' ||
-            !assetUrl ||
-            /^https?:\/\//.test(assetUrl)
-          ) {
-            return assetUrl;
-          }
-
-          rewrittenCount += 1;
-          return `${cdnBaseUrl}/${assetUrl.replace(/^\.\//, '')}`;
-        };
-
-        if (Array.isArray(manifest.icons)) {
-          manifest.icons = manifest.icons.map(
-            (icon: Record<string, unknown>) => ({
-              ...icon,
-              src: rewriteManifestAssetUrl(String(icon.src || '')),
-            })
-          );
-        }
-
-        if (Array.isArray(manifest.shortcuts)) {
-          manifest.shortcuts = manifest.shortcuts.map(
-            (shortcut: Record<string, unknown>) => ({
-              ...shortcut,
-              icons: Array.isArray(shortcut.icons)
-                ? shortcut.icons.map((icon: Record<string, unknown>) => ({
-                    ...icon,
-                    src: rewriteManifestAssetUrl(String(icon.src || '')),
-                  }))
-                : shortcut.icons,
-            })
-          );
-        }
-
-        if (rewrittenCount === 0) {
-          return;
-        }
-
-        fs.writeFileSync(
-          manifestPath,
-          JSON.stringify(manifest, null, 2) + '\n'
-        );
-        console.log(
-          `[ManifestAssets] Rewrote ${rewrittenCount} manifest asset url(s) to prefer CDN`
-        );
-      },
-    },
-  };
-}
-
 // 检测是否在 watch 模式下运行（命令行包含 --watch）
 const isWatchMode = process.argv.includes('--watch');
 const isServeMode = process.argv.includes('serve');
@@ -1160,8 +1008,7 @@ export default defineConfig({
   root: __dirname,
   cacheDir: '../../node_modules/.vite/apps/web',
 
-  // 使用相对路径，源站始终可用，CDN 加速由 SW 层处理
-  // SW 的 handleStaticRequest: cache → CDN → 源站回退
+  // 使用相对路径，静态资源全部走自建服务器，SW 只负责缓存
   base: process.env.VITE_BASE_URL || './',
 
   define: {
@@ -1220,8 +1067,6 @@ export default defineConfig({
       brotliSize: true,
     }),
     deferEntryAssetsPlugin(),
-    rewriteEntryAssetsToCDNPlugin(),
-    rewriteManifestAssetsToCDNPlugin(),
     precacheManifestPlugin(),
     idlePrefetchManifestPlugin(),
   ],
