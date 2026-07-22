@@ -1296,6 +1296,7 @@ class UnifiedCacheService {
       const normalizedOptions =
         options &&
         !('metadata' in options) &&
+        !('contentHash' in options) &&
         !('cachedAt' in options) &&
         !('lastUsed' in options)
           ? { metadata: options }

@@ -1,6 +1,13 @@
-// @vitest-environment node
-import 'fake-indexeddb/auto';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { IDBFactory } from 'fake-indexeddb';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 vi.mock('./sw-channel/client', () => ({
   swChannelClient: {
@@ -15,6 +22,22 @@ import {
   UNIFIED_DB_NAME,
   unifiedCacheService,
 } from './unified-cache-service';
+
+const nativeStructuredClone = globalThis.structuredClone;
+
+beforeAll(() => {
+  vi.stubGlobal('indexedDB', new IDBFactory());
+  vi.stubGlobal('crypto', undefined);
+  vi.stubGlobal(
+    'structuredClone',
+    (value: unknown, options?: StructuredSerializeOptions) => {
+      if (value instanceof Blob) {
+        return value.slice(0, value.size, value.type);
+      }
+      return nativeStructuredClone(value, options);
+    }
+  );
+});
 
 function deleteStoredBlob(url: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -33,9 +56,25 @@ function deleteStoredBlob(url: string): Promise<void> {
   });
 }
 
+function readBlobAsText(blob: Blob | null): Promise<string | null> {
+  if (!blob) {
+    return Promise.resolve(null);
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(blob);
+  });
+}
+
 afterEach(() => {
-  vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+afterAll(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('UnifiedCacheService insecure LAN fallback', () => {
@@ -53,10 +92,14 @@ describe('UnifiedCacheService insecure LAN fallback', () => {
     const restored = await unifiedCacheService.getCachedBlob(
       `http://192.168.50.225:7200${assetUrl}`
     );
+    const storedMedia = (await unifiedCacheService.getAllCachedMedia()).find(
+      (item) => item.url === assetUrl
+    );
 
     expect(cached).toBe(assetUrl);
     expect(restored?.type).toBe('image/png');
-    expect(await restored?.text()).toBe('local-image');
+    expect(await readBlobAsText(restored)).toBe('local-image');
+    expect(storedMedia?.contentHash).toBe('local-test');
   });
 
   it('falls back when Cache Storage exists but rejects access', async () => {
@@ -72,7 +115,7 @@ describe('UnifiedCacheService insecure LAN fallback', () => {
     });
     const restored = await unifiedCacheService.getCachedBlob(assetUrl);
 
-    expect(await restored?.text()).toBe('rejected-cache');
+    expect(await readBlobAsText(restored)).toBe('rejected-cache');
   });
 
   it('repairs legacy metadata when the persisted Blob is missing', async () => {
@@ -94,6 +137,6 @@ describe('UnifiedCacheService insecure LAN fallback', () => {
 
     expect(repaired.url).toBe(first.url);
     expect(repaired.reused).toBe(false);
-    expect(await restored?.text()).toBe('repair-local-image');
+    expect(await readBlobAsText(restored)).toBe('repair-local-image');
   });
 });
