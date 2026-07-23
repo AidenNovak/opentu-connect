@@ -27,18 +27,9 @@ import {
   setBroadcastCallback,
 } from './task-queue/utils/message-bus';
 import { setSwRuntimeBridge } from './task-queue/sw-runtime-bridge';
-import {
-  fetchFromCDNWithFallback,
-  extractVersionFromCDNPath,
-  getCDNStatusReport,
-  resetCDNStatus,
-  performHealthCheck,
-  setCDNPreference,
-} from './cdn-fallback';
 import { getSafeErrorMessage } from './task-queue/utils/sanitize-utils';
 import {
   shouldBypassAppShellCacheForLazyChunkRecovery,
-  shouldUseCDNFirstPreload,
   shouldUseOriginFirstPreload,
   shouldUseAppShellStrategy,
 } from './app-shell-routing';
@@ -65,9 +56,6 @@ export {
   deleteCacheByUrl,
   // Re-export from imports
   getInternalFetchLogs,
-  getCDNStatusReport,
-  resetCDNStatus,
-  performHealthCheck,
   // Constants
   APP_VERSION,
   IMAGE_CACHE_NAME,
@@ -276,9 +264,6 @@ setSwRuntimeBridge({
   getCacheStats,
   deleteCacheByUrl,
   getInternalFetchLogs,
-  getCDNStatusReport,
-  resetCDNStatus,
-  performHealthCheck,
   getAppVersion: () => APP_VERSION,
   getImageCacheName: () => IMAGE_CACHE_NAME,
   requestVideoThumbnail: async (url, timeoutMs, maxSize) => {
@@ -1250,22 +1235,6 @@ function logSWDebug(message: string, detail?: unknown): void {
   }
 }
 
-function getUnavailableCDNSnapshot(): Array<{
-  name: string;
-  failCount: number;
-  remainingCooldownMs: number;
-  lastFailureReason?: string;
-}> {
-  return getCDNStatusReport()
-    .filter((item) => item.remainingCooldownMs > 0 && !item.status.isHealthy)
-    .map((item) => ({
-      name: item.name,
-      failCount: item.status.failCount,
-      remainingCooldownMs: item.remainingCooldownMs,
-      lastFailureReason: item.status.lastFailureReason,
-    }));
-}
-
 function logStatic503Decision(
   stage: string,
   request: Request,
@@ -1276,7 +1245,6 @@ function logStatic503Decision(
     requestUrl: request.url,
     destination: request.destination,
     mode: request.mode,
-    unavailableCDNs: getUnavailableCDNSnapshot(),
     ...detail,
   });
 }
@@ -1914,15 +1882,6 @@ function isVersionedStaticResource(request: Request, url: URL): boolean {
   );
 }
 
-function normalizeAituPackageResourcePath(pathnameWithSearch: string): string {
-  const [pathname, search = ''] = pathnameWithSearch.split(/([?#].*)/, 2);
-  const normalizedPathname = pathname
-    .replace(/^\/npm\/aitu-app@[^/]+\//, '/')
-    .replace(/^\/aitu-app@[^/]+\//, '/');
-
-  return `${normalizedPathname}${search}`;
-}
-
 function normalizeScopedResourcePath(pathnameWithSearch: string): string {
   const [pathname, search = ''] = pathnameWithSearch.split(/([?#].*)/, 2);
   return `${getScopeRelativePathname(pathname)}${search}`;
@@ -1935,8 +1894,8 @@ function resolveStaticResourceFetchTargets(inputUrl: string): {
   originFetchUrl: string;
 } {
   const requestUrl = new URL(inputUrl, self.location.origin);
-  const resourcePath = normalizeAituPackageResourcePath(
-    normalizeScopedResourcePath(`${requestUrl.pathname}${requestUrl.search}`)
+  const resourcePath = normalizeScopedResourcePath(
+    `${requestUrl.pathname}${requestUrl.search}`
   );
   const normalizedResourceUrl = createScopeUrl(resourcePath);
 
@@ -2113,9 +2072,7 @@ async function deleteStaticCacheLookupKeys(
 }
 
 /**
- * 缓存单个文件
- * - 根壳与版本元数据保持同源优先，确保升级协议稳定
- * - manifest 已知的其他静态资源统一优先走 CDN，失败后回退服务器
+ * 缓存单个文件，全部走同源服务器
  */
 async function cacheFile(
   cache: Cache,
@@ -2146,37 +2103,9 @@ async function cacheFile(
       }
     }
 
-    let response: Response | null = null;
-    let source = 'server';
-    let fetchTarget = targets.originFetchUrl;
-
-    if (
-      shouldUseCDNFirstPreload(
-        getScopeRelativePathname(targets.requestUrl.pathname)
-      )
-    ) {
-      const cdnResult = await fetchFromCDNWithFallback(
-        targets.resourcePath,
-        APP_VERSION,
-        SW_SCOPE_BASE_URL.href.replace(/\/$/, ''),
-        {
-          preferLocal: false,
-          requestKind: 'background-prefetch',
-        }
-      );
-
-      if (cdnResult?.response.ok) {
-        response = cdnResult.response;
-        source = cdnResult.source;
-        fetchTarget = cdnResult.targetUrl;
-      }
-    }
-
-    if (!response) {
-      response = await fetch(targets.originFetchUrl, { cache: 'reload' });
-      source = 'server';
-      fetchTarget = targets.originFetchUrl;
-    }
+    const response = await fetch(targets.originFetchUrl, { cache: 'reload' });
+    const source = 'server';
+    const fetchTarget = targets.originFetchUrl;
 
     if (
       response.ok &&
@@ -2221,8 +2150,7 @@ async function cacheFile(
 
 /**
  * 预缓存静态资源
- * 使用并发控制避免同时发起太多请求
- * 根壳与发布元数据保持同源优先，其余 manifest 静态资源统一 CDN 优先
+ * 使用并发控制避免同时发起太多请求，全部走同源服务器
  */
 async function precacheStaticFiles(
   cache: Cache,
@@ -2231,8 +2159,6 @@ async function precacheStaticFiles(
   total: number;
   successCount: number;
   failCount: number;
-  cdnCount: number;
-  serverCount: number;
 }> {
   const CONCURRENCY = 6; // 并发数
   const allResults: Array<{
@@ -2354,20 +2280,12 @@ async function precacheStaticFiles(
 
   const successCount = allResults.filter((r) => r.success).length;
   const failCount = allResults.length - successCount;
-  const cdnCount = allResults.filter(
-    (r) => r.success && r.source && r.source !== 'server'
-  ).length;
-  const serverCount = allResults.filter(
-    (r) => r.success && r.source === 'server'
-  ).length;
   const cacheEntriesAfter = await getCacheEntryCount(cache);
 
   logSWDebug('precacheStaticFiles finished', {
     total,
     successCount,
     failCount,
-    cdnCount,
-    serverCount,
     cacheEntriesBefore,
     cacheEntriesAfter,
   });
@@ -2376,8 +2294,6 @@ async function precacheStaticFiles(
     total,
     successCount,
     failCount,
-    cdnCount,
-    serverCount,
   };
 }
 
@@ -2897,15 +2813,6 @@ sw.addEventListener('activate', (event: ExtendableEvent) => {
       });
       await postVersionState();
 
-      // 预热 CDN 偏好，后续静态资源请求可以直接复用
-      // 失败仅影响优先级排序，不影响激活
-      try {
-        const { ensureCDNPreferenceLoaded } = await import('./cdn-fallback');
-        await ensureCDNPreferenceLoaded();
-      } catch (error) {
-        console.warn('Failed to load persisted CDN preference:', error);
-      }
-
       if (shouldClaimClientsOnActivate) {
         logSWDebug('activate: before clients.claim');
         await sw.clients.claim();
@@ -3050,72 +2957,58 @@ function broadcastPostMessageLog(entry: PostMessageLogEntry): void {
   }
 }
 
-async function tryFetchStaticResourceFromCDN(
+async function tryFetchVersionedStaticResourceFromOrigin(
   cache: Cache,
   request: Request,
   resourcePath: string,
   appVersion: string
 ): Promise<Response | null> {
-  if (isDevelopment) {
-    return null;
-  }
-
   try {
     const targets = resolveStaticResourceFetchTargets(request.url);
-    const cdnResult = await fetchFromCDNWithFallback(
-      resourcePath,
-      appVersion,
-      SW_SCOPE_BASE_URL.href.replace(/\/$/, ''),
-      {
-        // 运行时 hash 资源优先走 CDN，失败后再回源站兜底。
-        preferLocal: false,
-        requestKind: 'interactive-runtime',
-      }
-    );
+    const response = await fetch(targets.originFetchUrl, { cache: 'reload' });
 
-    if (!cdnResult?.response.ok) {
-      console.warn(
-        '[SW CDN] Static resource unavailable from all fallback sources',
-        {
-          requestUrl: request.url,
-          resourcePath,
-          appVersion,
-          unavailableCDNs: getUnavailableCDNSnapshot(),
-        }
-      );
+    if (!response.ok) {
+      console.warn('[SW] Static resource unavailable from origin', {
+        requestUrl: request.url,
+        resourcePath,
+        appVersion,
+        status: response.status,
+      });
       return null;
     }
 
     const requestUrl = new URL(request.url);
-    if (isStaticHtmlFallbackResponse(request, requestUrl, cdnResult.response)) {
+    if (isStaticHtmlFallbackResponse(request, requestUrl, response)) {
       return null;
     }
 
     const cachedResponse = await cacheStaticResponse(
       cache,
       targets.cacheKey,
-      cdnResult.response,
+      response,
       {
-        source: cdnResult.source,
+        source: 'server',
         revision: 'runtime',
-        fetchTarget: cdnResult.targetUrl,
+        fetchTarget: targets.originFetchUrl,
         appVersion,
       }
     );
 
     if (targets.cacheKey !== request.url) {
-      logSWDebug('tryFetchStaticResourceFromCDN: cached under normalized key', {
-        requestUrl: request.url,
-        normalizedCacheKey: targets.cacheKey,
-        resourcePath,
-        source: cdnResult.source,
-        fetchTarget: cdnResult.targetUrl,
-      });
+      logSWDebug(
+        'tryFetchVersionedStaticResourceFromOrigin: cached under normalized key',
+        {
+          requestUrl: request.url,
+          normalizedCacheKey: targets.cacheKey,
+          resourcePath,
+          fetchTarget: targets.originFetchUrl,
+        }
+      );
     }
 
     return cachedResponse;
-  } catch (cdnError) {
-    console.warn('[SW CDN] CDN fallback failed:', cdnError);
+  } catch (fetchError) {
+    console.warn('[SW] Origin fetch failed for static resource:', fetchError);
     return null;
   }
 }
@@ -3256,18 +3149,6 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
         generateThumbnailAsync(blob, url, mediaType);
       })();
     }
-    return;
-  }
-
-  if (event.data && event.data.type === 'SW_CDN_SET_PREFERENCE') {
-    event.waitUntil(
-      setCDNPreference({
-        cdn: event.data.cdn,
-        latency: event.data.latency,
-        timestamp: event.data.timestamp,
-        version: event.data.version,
-      })
-    );
     return;
   }
 
@@ -5813,11 +5694,12 @@ async function handleStaticRequest(request: Request): Promise<Response> {
     await deleteStaticCacheLookupKeys(cache, request, normalizedCacheKey);
   }
 
-  // Cache miss - determine if this is a CDN-cacheable static resource
+  // Cache miss - versioned static assets (hashed js/css/images/fonts) get
+  // an old-cache/browser-cache lookup before falling back to origin fetch.
   const resourcePath = staticTargets.resourcePath;
-  const isSmartCDNResource = isVersionedStaticResource(request, url);
+  const isVersionedAsset = isVersionedStaticResource(request, url);
 
-  if (isSmartCDNResource) {
+  if (isVersionedAsset) {
     if (request.url !== normalizedCacheKey) {
       logSWDebug('handleStaticRequest: cross-origin static cache miss', {
         requestUrl: request.url,
@@ -5842,25 +5724,19 @@ async function handleStaticRequest(request: Request): Promise<Response> {
       return browserCachedResponse;
     }
 
-    // 请求 URL 中已包含 CDN 版本号时优先使用，避免版本重写导致 404
-    const embeddedVersion = extractVersionFromCDNPath(url.pathname);
-    const cdnVersion = embeddedVersion || committedVersion;
-
-    const smartResponse = await tryFetchStaticResourceFromCDN(
+    const originResponse = await tryFetchVersionedStaticResourceFromOrigin(
       cache,
       request,
       resourcePath,
-      cdnVersion
+      committedVersion
     );
-    if (smartResponse) {
-      return smartResponse;
+    if (originResponse) {
+      return originResponse;
     }
 
-    logStatic503Decision('smart-cdn-resource-failed', request, {
+    logStatic503Decision('versioned-resource-origin-failed', request, {
       resourcePath,
       committedVersion,
-      hasEmbeddedVersion: Boolean(embeddedVersion),
-      attemptedVersion: cdnVersion,
     });
     return new Response('Resource unavailable offline', {
       status: 503,

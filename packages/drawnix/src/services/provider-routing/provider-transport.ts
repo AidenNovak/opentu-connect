@@ -27,7 +27,8 @@ function rewriteBaseUrlForDevProxy(baseUrl: string): string {
   try {
     const isDev =
       typeof import.meta !== 'undefined' &&
-      (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
+      (import.meta as { env?: { DEV?: boolean; MODE?: string } }).env?.DEV &&
+      (import.meta as { env?: { MODE?: string } }).env?.MODE !== 'test';
     if (!isDev) return baseUrl;
     if (!/^https?:\/\//i.test(baseUrl)) return baseUrl;
 
@@ -50,6 +51,10 @@ function applyBaseUrlStrategy(
   switch (strategy) {
     case 'trim-v1':
       return normalizedBaseUrl.replace(/\/v1$/i, '');
+    case 'ensure-v1':
+      return /\/v1$/i.test(normalizedBaseUrl)
+        ? normalizedBaseUrl
+        : `${normalizedBaseUrl}/v1`;
     case 'preserve':
     default:
       return normalizedBaseUrl;
@@ -62,7 +67,24 @@ function joinUrl(baseUrl: string, path: string): string {
   }
 
   const normalizedBase = trimTrailingSlashes(baseUrl);
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  let normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  // Endpoint discovery and manually persisted bindings can include the API
+  // version even when the provider base URL already ends with it. Collapse
+  // only the shared version segment at the join boundary so a valid
+  // /v1/images/generations request never becomes /v1/v1/images/generations.
+  const baseVersionMatch = normalizedBase.match(/\/(v\d+(?:beta\d*)?)$/i);
+  const pathVersionMatch = normalizedPath.match(
+    /^\/(v\d+(?:beta\d*)?)(?:\/|$)/i
+  );
+  if (
+    baseVersionMatch &&
+    pathVersionMatch &&
+    baseVersionMatch[1].toLowerCase() === pathVersionMatch[1].toLowerCase()
+  ) {
+    normalizedPath = normalizedPath.slice(pathVersionMatch[1].length + 1);
+  }
+
   return `${normalizedBase}${normalizedPath}`;
 }
 
@@ -80,6 +102,20 @@ function isFetchNetworkError(error: unknown): boolean {
     return false;
   }
   return /Failed to fetch|Load failed|NetworkError/i.test(error.message);
+}
+
+function shouldRetryTuziResponse(
+  context: ResolvedProviderContext,
+  request: ProviderTransportRequest,
+  response: Response
+): boolean {
+  return (
+    response.status === 404 &&
+    isTrustedTuziApiBaseUrl(context.baseUrl) &&
+    !/^https?:\/\//i.test(request.path) &&
+    (request.method || 'GET').toUpperCase() === 'POST' &&
+    /\/images\/(?:generations|edits)\/?$/i.test(request.path)
+  );
 }
 
 async function getTuziFallbackBaseUrls(baseUrl: string): Promise<string[]> {
@@ -223,12 +259,53 @@ function createTimeoutSignal(
 
 function applyRequestIdHeader(
   headers: Record<string, string>,
-  requestId: string | undefined
+  requestId: string | undefined,
+  enabled: boolean
 ): Record<string, string> {
-  if (!requestId) {
+  if (!requestId || !enabled) {
     return headers;
   }
   return { ...headers, 'X-Request-Id': requestId };
+}
+
+function getRuntimeOrigin(): string | undefined {
+  const origin = globalThis.location?.origin;
+  return typeof origin === 'string' && origin !== 'null' ? origin : undefined;
+}
+
+/**
+ * X-Request-Id recovery is a Tuzi-specific capability. Cross-origin browser
+ * requests must not carry the header because the public API does not include
+ * it in Access-Control-Allow-Headers, which makes the preflight fail before
+ * the image request is submitted.
+ */
+export function canAttachProviderRequestIdHeader(
+  context: ResolvedProviderContext,
+  request: Pick<ProviderTransportRequest, 'path' | 'baseUrlStrategy'>,
+  runtimeOrigin: string | undefined = getRuntimeOrigin()
+): boolean {
+  if (!isTrustedTuziApiBaseUrl(context.baseUrl)) {
+    return false;
+  }
+
+  const resolvedBaseUrl = applyBaseUrlStrategy(
+    context.baseUrl,
+    request.baseUrlStrategy
+  );
+  const requestUrl = joinUrl(resolvedBaseUrl, request.path);
+
+  if (!/^https?:\/\//i.test(requestUrl)) {
+    return true;
+  }
+  if (!runtimeOrigin) {
+    return false;
+  }
+
+  try {
+    return new URL(requestUrl).origin === new URL(runtimeOrigin).origin;
+  } catch {
+    return false;
+  }
 }
 
 export class ProviderTransport {
@@ -236,20 +313,20 @@ export class ProviderTransport {
     context: ResolvedProviderContext,
     request: ProviderTransportRequest
   ): PreparedProviderTransportRequest {
-    const mergedHeaders = mergeHeaders(context.extraHeaders, request.headers);
-    const authenticatedHeaders = applyAuthHeaders(context, mergedHeaders);
-    const finalHeaders = applyRequestIdHeader(
-      authenticatedHeaders,
-      request.requestId
-    );
-    const query = applyAuthQuery(context, request.query || {});
     const resolvedBaseUrl = applyBaseUrlStrategy(
       context.baseUrl,
       request.baseUrlStrategy
     );
     const url = `${joinUrl(resolvedBaseUrl, request.path)}${buildQueryString(
-      query
+      applyAuthQuery(context, request.query || {})
     )}`;
+    const mergedHeaders = mergeHeaders(context.extraHeaders, request.headers);
+    const authenticatedHeaders = applyAuthHeaders(context, mergedHeaders);
+    const finalHeaders = applyRequestIdHeader(
+      authenticatedHeaders,
+      request.requestId,
+      canAttachProviderRequestIdHeader(context, request)
+    );
 
     return {
       url,
@@ -277,9 +354,41 @@ export class ProviderTransport {
       signal: timeoutControl.signal,
     });
     const fetcher = request.fetcher || fetch;
+    const requestIdHeaderApplied = Boolean(
+      prepared.headers['X-Request-Id'] || prepared.headers['x-request-id']
+    );
 
     try {
-      return await fetcher(prepared.url, prepared.init);
+      const response = await fetcher(prepared.url, prepared.init);
+      if (!shouldRetryTuziResponse(context, request, response)) {
+        return response;
+      }
+
+      const fallbackBaseUrls = await getTuziFallbackBaseUrls(context.baseUrl);
+      for (const fallbackBaseUrl of fallbackBaseUrls) {
+        const fallbackPrepared = this.prepareRequest(
+          { ...context, baseUrl: fallbackBaseUrl },
+          { ...request, signal: timeoutControl.signal }
+        );
+        try {
+          const fallbackResponse = await fetcher(
+            fallbackPrepared.url,
+            fallbackPrepared.init
+          );
+          if (!shouldRetryTuziResponse(context, request, fallbackResponse)) {
+            return fallbackResponse;
+          }
+        } catch (fallbackError) {
+          if (
+            timeoutControl.didTimeout() ||
+            !isFetchNetworkError(fallbackError)
+          ) {
+            throw fallbackError;
+          }
+        }
+      }
+
+      return response;
     } catch (error) {
       if (timeoutControl.didTimeout()) {
         const timeoutMinutes = Math.floor((request.timeoutMs || 0) / 60000);
@@ -287,7 +396,7 @@ export class ProviderTransport {
           `请求超时（>${timeoutMinutes} 分钟）`
         );
         timeoutError.name = 'TimeoutError';
-        if (request.requestId) {
+        if (request.requestId && requestIdHeaderApplied) {
           timeoutError.requestId = request.requestId;
         }
         throw timeoutError;

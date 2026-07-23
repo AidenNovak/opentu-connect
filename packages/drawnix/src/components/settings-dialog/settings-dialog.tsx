@@ -106,11 +106,16 @@ import {
 import { modelBenchmarkService } from '../../services/model-benchmark-service';
 import { HoverTip } from '../shared/hover';
 import { createProviderProfileDraft } from './provider-profile-draft';
+import {
+  normalizeEndpointApiBaseUrl,
+  normalizeEndpointUrl,
+  resolveEndpointSelectionUrl,
+} from './provider-endpoint-utils';
 import { MessagePlugin } from '../../utils/message-plugin';
 import {
+  isTrustedTuziApiBaseUrl,
   loadTuziApiEndpointSources,
   TUZI_API_FALLBACK_ENDPOINTS,
-  TUZI_API_SOURCE_URL,
   type TuziApiEndpointSource,
 } from '../../services/provider-routing/tuzi-api-endpoints';
 
@@ -140,6 +145,13 @@ type ProviderNavigationIntent =
 
 const SETTINGS_PROVIDER_NAV_EVENT = 'aitu:settings:provider-nav';
 const SETTINGS_DIALOG_COMPACT_BREAKPOINT = 980;
+const TUZI_PROVIDER_PROFILE_IDS = new Set([
+  LEGACY_DEFAULT_PROVIDER_PROFILE_ID,
+  TUZI_ORIGINAL_PROVIDER_PROFILE_ID,
+  TUZI_MIX_PROVIDER_PROFILE_ID,
+  TUZI_CODEX_PROVIDER_PROFILE_ID,
+  TUZI_BUSINESS_PROVIDER_PROFILE_ID,
+]);
 let tuziApiEndpointCache: EndpointOption[] | null = null;
 
 interface EndpointOption {
@@ -149,6 +161,14 @@ interface EndpointOption {
   name?: string;
   description?: string;
   removable?: boolean;
+}
+
+function isTuziProviderProfile(profile?: ProviderProfile | null): boolean {
+  return Boolean(
+    profile &&
+      (TUZI_PROVIDER_PROFILE_IDS.has(profile.id) ||
+        isTrustedTuziApiBaseUrl(profile.baseUrl))
+  );
 }
 
 const VIEW_SECTIONS: Array<{ value: SettingsView; label: string }> = [
@@ -1029,23 +1049,6 @@ function buildPresetRouteModels(
   );
 }
 
-function normalizeEndpointUrl(url?: string | null): string {
-  const trimmed = (url || '').trim();
-  if (!trimmed) return TUZI_PROVIDER_DEFAULT_BASE_URL;
-  const withoutTrailingSlash = trimmed.replace(/\/+$/, '');
-  try {
-    const parsed = new URL(
-      /^[a-z][a-z\d+\-.]*:\/\//i.test(withoutTrailingSlash)
-        ? withoutTrailingSlash
-        : `https://${withoutTrailingSlash}`
-    );
-    const pathname = parsed.pathname.replace(/\/+$/, '');
-    return `${parsed.origin}${pathname === '/' ? '' : pathname}`;
-  } catch {
-    return withoutTrailingSlash || TUZI_PROVIDER_DEFAULT_BASE_URL;
-  }
-}
-
 function createEndpointOption(
   endpoint:
     | string
@@ -1203,6 +1206,7 @@ export const SettingsDialog = ({
     profilesDraft.find((profile) => profile.id === selectedProfileId) ||
     profilesDraft[0] ||
     null;
+  const isSelectedTuziProfile = isTuziProviderProfile(selectedProfile);
   const selectedImageApiCompatibilityHint = selectedProfile
     ? getImageApiCompatibilityHint(selectedProfile)
     : '同一个图片模型在不同 API Key 或网关下可能需要不同接口格式；不确定时使用自动。';
@@ -1562,8 +1566,15 @@ export const SettingsDialog = ({
     if (!selectedProfile) {
       return;
     }
-    const normalizedUrl = normalizeEndpointUrl(selectedProfile.baseUrl);
-    setSelectedEndpointUrl(normalizedUrl);
+    setSelectedEndpointUrl(
+      resolveEndpointSelectionUrl(
+        selectedProfile.baseUrl,
+        endpointOptions.map((endpoint) => endpoint.url)
+      )
+    );
+  }, [endpointOptions, selectedProfile?.baseUrl, selectedProfile?.id]);
+
+  useEffect(() => {
     setEndpointSelectionMode('auto');
   }, [selectedProfile?.id]);
 
@@ -1595,16 +1606,17 @@ export const SettingsDialog = ({
         return;
       }
       const normalizedUrl = normalizeEndpointUrl(url);
+      const normalizedApiBaseUrl = normalizeEndpointApiBaseUrl(normalizedUrl);
       setEndpointSelectionMode(mode);
       setSelectedEndpointUrl(normalizedUrl);
       updateProfile(selectedProfile.id, (profile) => ({
         ...profile,
-        baseUrl: normalizedUrl,
+        baseUrl: normalizedApiBaseUrl,
       }));
       if (selectedProfile.id === LEGACY_DEFAULT_PROVIDER_PROFILE_ID) {
         void geminiSettings.update({
           ...geminiSettings.get(),
-          baseUrl: normalizedUrl,
+          baseUrl: normalizedApiBaseUrl,
         });
       }
     },
@@ -2221,7 +2233,9 @@ export const SettingsDialog = ({
         selectedProfile.id,
         normalizedBaseUrl,
         trimmedApiKey,
-        tuziApiEndpointOptions.map((endpoint) => endpoint.url)
+        isSelectedTuziProfile
+          ? tuziApiEndpointOptions.map((endpoint) => endpoint.url)
+          : []
       );
       analytics.trackUIInteraction({
         area: 'settings',
@@ -3321,180 +3335,182 @@ export const SettingsDialog = ({
                 }
                 placeholder={TUZI_PROVIDER_DEFAULT_BASE_URL}
               />
-              <div className="settings-dialog__endpoint-panel ai-input-bar__site-panel">
-                <div className="ai-input-bar__site-panel-toolbar">
-                  <div className="ai-input-bar__site-title">
-                    <div className="ai-input-bar__site-count">
-                      {endpointOptions.length} 个端点
+              {isSelectedTuziProfile ? (
+                <div className="settings-dialog__endpoint-panel ai-input-bar__site-panel">
+                  <div className="ai-input-bar__site-panel-toolbar">
+                    <div className="ai-input-bar__site-title">
+                      <div className="ai-input-bar__site-count">
+                        {endpointOptions.length} 个端点
+                      </div>
+                      <div className="ai-input-bar__site-source">
+                        来源: tuzi-api
+                      </div>
                     </div>
-                    <div className="ai-input-bar__site-source">
-                      来源: tuzi-api
+                    <div className="ai-input-bar__site-actions">
+                      <label className="ai-input-bar__site-auto">
+                        <input
+                          type="checkbox"
+                          checked={endpointSelectionMode === 'auto'}
+                          onChange={(event) =>
+                            handleEndpointAutoSelectChange(event.target.checked)
+                          }
+                        />
+                        <span>自动选择</span>
+                      </label>
+                      <button
+                        type="button"
+                        className="ai-input-bar__site-test-btn"
+                        onClick={() => void handleRunEndpointSpeedTest()}
+                        disabled={
+                          isEndpointTesting || endpointOptions.length === 0
+                        }
+                      >
+                        {isEndpointTesting ? (
+                          <Loader2
+                            size={14}
+                            className="ai-input-bar__site-spin"
+                          />
+                        ) : (
+                          <Zap size={15} />
+                        )}
+                        <span>测速</span>
+                      </button>
                     </div>
                   </div>
-                  <div className="ai-input-bar__site-actions">
-                    <label className="ai-input-bar__site-auto">
-                      <input
-                        type="checkbox"
-                        checked={endpointSelectionMode === 'auto'}
-                        onChange={(event) =>
-                          handleEndpointAutoSelectChange(event.target.checked)
+
+                  <div className="ai-input-bar__site-list">
+                    {endpointOptions.map((endpoint) => {
+                      const selected =
+                        endpoint.url === activeEndpoint.url ||
+                        (endpointSelectionMode === 'auto' &&
+                          endpoint.url === bestEndpoint.url);
+                      const latency = endpointLatencies[endpoint.url];
+                      const latencyText =
+                        typeof latency === 'number'
+                          ? `${latency}ms`
+                          : latency === 'failed'
+                          ? '失败'
+                          : '—';
+                      const latencyState =
+                        latency === 'failed'
+                          ? 'failed'
+                          : typeof latency === 'number' && latency < 300
+                          ? 'fast'
+                          : typeof latency === 'number' && latency >= 800
+                          ? 'slow'
+                          : null;
+
+                      return (
+                        <div
+                          key={endpoint.id}
+                          role="button"
+                          tabIndex={0}
+                          className={classNames('ai-input-bar__site-row', {
+                            'ai-input-bar__site-row--selected': selected,
+                          })}
+                          onClick={() => {
+                            handleEndpointSelect(endpoint.url, 'manual');
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              handleEndpointSelect(endpoint.url, 'manual');
+                            }
+                          }}
+                        >
+                          <span className="ai-input-bar__site-row-dot" />
+                          <span className="ai-input-bar__site-row-copy">
+                            <span className="ai-input-bar__site-row-name">
+                              {endpoint.name || endpoint.shortLabel}
+                            </span>
+                            <span className="ai-input-bar__site-row-url">
+                              {endpoint.url}
+                            </span>
+                            {endpoint.description ? (
+                              <span className="ai-input-bar__site-row-desc">
+                                {endpoint.description}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span
+                            className={classNames(
+                              'ai-input-bar__site-row-latency',
+                              {
+                                'ai-input-bar__site-row-latency--fast':
+                                  latencyState === 'fast',
+                                'ai-input-bar__site-row-latency--slow':
+                                  latencyState === 'slow',
+                                'ai-input-bar__site-row-latency--failed':
+                                  latencyState === 'failed',
+                              }
+                            )}
+                          >
+                            {isEndpointTesting && latency == null ? (
+                              <Loader2
+                                size={14}
+                                className="ai-input-bar__site-spin"
+                              />
+                            ) : (
+                              latencyText
+                            )}
+                          </span>
+                          {endpoint.removable ? (
+                            <button
+                              type="button"
+                              className="ai-input-bar__site-remove"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleRemoveCustomEndpoint(endpoint);
+                              }}
+                            >
+                              <X size={17} />
+                            </button>
+                          ) : (
+                            <span className="ai-input-bar__site-remove-placeholder">
+                              —
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="ai-input-bar__site-add">
+                    <input
+                      value={customEndpointUrl}
+                      placeholder="https://api.example.com"
+                      onChange={(event) => {
+                        setCustomEndpointUrl(event.target.value);
+                        setEndpointAddError('');
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          handleAddCustomEndpoint();
                         }
-                      />
-                      <span>自动选择</span>
-                    </label>
+                      }}
+                    />
                     <button
                       type="button"
-                      className="ai-input-bar__site-test-btn"
-                      onClick={() => void handleRunEndpointSpeedTest()}
-                      disabled={
-                        isEndpointTesting || endpointOptions.length === 0
-                      }
+                      className="ai-input-bar__site-add-btn"
+                      onClick={handleAddCustomEndpoint}
                     >
-                      {isEndpointTesting ? (
-                        <Loader2
-                          size={14}
-                          className="ai-input-bar__site-spin"
-                        />
-                      ) : (
-                        <Zap size={15} />
-                      )}
-                      <span>测速</span>
+                      <Plus size={18} />
                     </button>
                   </div>
+                  {endpointAddError ? (
+                    <div className="ai-input-bar__site-error">
+                      {endpointAddError}
+                    </div>
+                  ) : null}
+                  {tuziApiEndpointLoadError ? (
+                    <div className="ai-input-bar__site-error">
+                      {tuziApiEndpointLoadError}
+                    </div>
+                  ) : null}
                 </div>
-
-                <div className="ai-input-bar__site-list">
-                  {endpointOptions.map((endpoint) => {
-                    const selected =
-                      endpoint.url === activeEndpoint.url ||
-                      (endpointSelectionMode === 'auto' &&
-                        endpoint.url === bestEndpoint.url);
-                    const latency = endpointLatencies[endpoint.url];
-                    const latencyText =
-                      typeof latency === 'number'
-                        ? `${latency}ms`
-                        : latency === 'failed'
-                        ? '失败'
-                        : '—';
-                    const latencyState =
-                      latency === 'failed'
-                        ? 'failed'
-                        : typeof latency === 'number' && latency < 300
-                        ? 'fast'
-                        : typeof latency === 'number' && latency >= 800
-                        ? 'slow'
-                        : null;
-
-                    return (
-                      <div
-                        key={endpoint.id}
-                        role="button"
-                        tabIndex={0}
-                        className={classNames('ai-input-bar__site-row', {
-                          'ai-input-bar__site-row--selected': selected,
-                        })}
-                        onClick={() => {
-                          handleEndpointSelect(endpoint.url, 'manual');
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            handleEndpointSelect(endpoint.url, 'manual');
-                          }
-                        }}
-                      >
-                        <span className="ai-input-bar__site-row-dot" />
-                        <span className="ai-input-bar__site-row-copy">
-                          <span className="ai-input-bar__site-row-name">
-                            {endpoint.name || endpoint.shortLabel}
-                          </span>
-                          <span className="ai-input-bar__site-row-url">
-                            {endpoint.url}
-                          </span>
-                          {endpoint.description ? (
-                            <span className="ai-input-bar__site-row-desc">
-                              {endpoint.description}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span
-                          className={classNames(
-                            'ai-input-bar__site-row-latency',
-                            {
-                              'ai-input-bar__site-row-latency--fast':
-                                latencyState === 'fast',
-                              'ai-input-bar__site-row-latency--slow':
-                                latencyState === 'slow',
-                              'ai-input-bar__site-row-latency--failed':
-                                latencyState === 'failed',
-                            }
-                          )}
-                        >
-                          {isEndpointTesting && latency == null ? (
-                            <Loader2
-                              size={14}
-                              className="ai-input-bar__site-spin"
-                            />
-                          ) : (
-                            latencyText
-                          )}
-                        </span>
-                        {endpoint.removable ? (
-                          <button
-                            type="button"
-                            className="ai-input-bar__site-remove"
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              handleRemoveCustomEndpoint(endpoint);
-                            }}
-                          >
-                            <X size={17} />
-                          </button>
-                        ) : (
-                          <span className="ai-input-bar__site-remove-placeholder">
-                            —
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="ai-input-bar__site-add">
-                  <input
-                    value={customEndpointUrl}
-                    placeholder="https://api.example.com"
-                    onChange={(event) => {
-                      setCustomEndpointUrl(event.target.value);
-                      setEndpointAddError('');
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        handleAddCustomEndpoint();
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="ai-input-bar__site-add-btn"
-                    onClick={handleAddCustomEndpoint}
-                  >
-                    <Plus size={18} />
-                  </button>
-                </div>
-                {endpointAddError ? (
-                  <div className="ai-input-bar__site-error">
-                    {endpointAddError}
-                  </div>
-                ) : null}
-                {tuziApiEndpointLoadError ? (
-                  <div className="ai-input-bar__site-error">
-                    {tuziApiEndpointLoadError}
-                  </div>
-                ) : null}
-              </div>
+              ) : null}
             </div>
 
             <div className="settings-dialog__field settings-dialog__field--column settings-dialog__field--full">
