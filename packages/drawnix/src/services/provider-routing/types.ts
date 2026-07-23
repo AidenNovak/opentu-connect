@@ -1,6 +1,7 @@
 import type { ModelType } from '../../constants/model-config';
 import type {
   ImageApiCompatibility,
+  ManualHttpTemplateMetadata,
   ModelRef,
   ProviderProfile,
 } from '../../utils/settings-types';
@@ -70,6 +71,7 @@ export interface ProviderBindingMetadata {
   image?: ProviderImageBindingMetadata;
   video?: ProviderVideoBindingMetadata;
   audio?: ProviderAudioBindingMetadata;
+  manualHttp?: ManualHttpTemplateMetadata;
   [key: string]: unknown;
 }
 

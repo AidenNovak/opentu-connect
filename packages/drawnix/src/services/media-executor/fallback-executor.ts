@@ -24,6 +24,7 @@ import {
   resolveInvocationRoute,
   type ModelRef,
 } from '../../utils/settings-manager';
+import { getDefaultImageModel } from '../../constants/model-config';
 import {
   canAttachProviderRequestIdHeader,
   providerTransport,
@@ -42,6 +43,13 @@ import {
   callApiWithRetry,
   callGoogleGenerateContentRaw,
 } from '../../utils/gemini-api/apiCalls';
+import {
+  buildManualHttpRequestPayload,
+  buildManualHttpVariables,
+  getManualHttpTemplate,
+  normalizeManualTextResponse,
+  renderTemplate,
+} from '../provider-routing/manual-http-template';
 import type { GeminiMessage as UnifiedGeminiMessage } from '../../utils/gemini-api/types';
 import {
   classifyApiCredentialError,
@@ -49,10 +57,7 @@ import {
 } from '../../utils/api-auth-error-event';
 import { extractTextContent, parseToolCalls } from '../agent/tool-parser';
 import { unifiedCacheService } from '../unified-cache-service';
-import {
-  submitVideoGeneration,
-  recoverImageByRequestId,
-} from '../media-api';
+import { recoverImageByRequestId, submitVideoGeneration } from '../media-api';
 import { emitImageRequestIdDebugLog } from '../media-api/request-id-debug';
 import {
   extractPromptFromMessages,
@@ -77,7 +82,6 @@ import {
   resolveLegacyTaskInvocationRouteModel,
   shouldUseStrictTaskInvocationRoute,
 } from '../task-invocation-route';
-import { normalizeLlmTextContent } from '../../utils/llm-json-extractor';
 
 function inferAuthTypeFromRoute(
   route: ReturnType<typeof resolveInvocationRoute>
@@ -290,7 +294,12 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     options?.onProgress?.({ progress: 0, phase: 'submitting' });
 
     const startTime = Date.now();
-    const modelName = model || config.imageConfig.modelName;
+    const modelName =
+      modelRef?.modelId ||
+      config.imageConfig.binding?.modelId ||
+      config.imageConfig.modelName ||
+      model ||
+      getDefaultImageModel();
 
     // 异步图片模型：使用 /v1/videos 接口（仅当 binding 为 async-image 时）
     const imagePlan = resolveInvocationPlanFromRoute(
@@ -440,10 +449,9 @@ export class FallbackMediaExecutor implements IMediaExecutor {
             errorMessage: errorBody.substring(0, 500),
           });
           throw new Error(
-            `Image generation failed: ${response.status} - ${errorBody.substring(
-              0,
-              200
-            )}`
+            `Image generation failed: ${
+              response.status
+            } - ${errorBody.substring(0, 200)}`
           );
         }
 
@@ -479,7 +487,6 @@ export class FallbackMediaExecutor implements IMediaExecutor {
           throw sendError;
         }
       }
-
       const duration = Date.now() - startTime;
       // 记录成功（找回场景也走这里）
       completeLLMApiLog(logId, {
@@ -998,9 +1005,7 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
       options?.onProgress?.({ progress: 80 });
 
-      const fullResponse = normalizeLlmTextContent(
-        data.choices?.[0]?.message?.content
-      );
+      const fullResponse = data.choices?.[0]?.message?.content || '';
       const elapsedTime = Date.now() - startTime;
 
       // 记录成功
@@ -1136,73 +1141,151 @@ export class FallbackMediaExecutor implements IMediaExecutor {
         await taskStorageWriter.updateProgress(taskId, 30, 'submitting');
       }
 
-      const data =
-        config.textConfig.protocol === 'google.generateContent'
-          ? await callGoogleGenerateContentRaw(config.textConfig, messages, {
-              stream: false,
+      const manualHttpTemplate = getManualHttpTemplate(
+        config.textConfig.binding?.metadata
+      );
+      const manualVariables = manualHttpTemplate
+        ? buildManualHttpVariables({
+            model: modelName,
+            modelRef: config.textConfig.binding?.modelId
+              ? {
+                  profileId: config.textConfig.binding.profileId,
+                  modelId: config.textConfig.binding.modelId,
+                }
+              : null,
+            prompt: normalizedPrompt,
+            messages,
+            images: referenceImages,
+            params: extraParams,
+          })
+        : null;
+      const manualPayload =
+        manualHttpTemplate && manualVariables
+          ? await buildManualHttpRequestPayload(
+              manualHttpTemplate,
+              manualVariables
+            )
+          : null;
+      const data = manualHttpTemplate
+        ? await providerTransport
+            .send(buildProviderContext(config.textConfig), {
+              path: renderTemplate(
+                config.textConfig.binding?.submitPath || '/chat/completions',
+                manualVariables || {}
+              ) as string,
+              baseUrlStrategy: config.textConfig.binding?.baseUrlStrategy,
+              method:
+                manualHttpTemplate.method ||
+                (manualPayload?.body === undefined ? 'GET' : 'POST'),
+              headers: {
+                ...(manualPayload?.contentType
+                  ? { 'Content-Type': manualPayload.contentType }
+                  : {}),
+                ...(!manualPayload?.contentType &&
+                manualPayload?.body !== undefined &&
+                !(manualPayload.body instanceof FormData)
+                  ? { 'Content-Type': 'application/json' }
+                  : {}),
+                ...(renderTemplate(
+                  manualHttpTemplate.headers || {},
+                  manualVariables || {}
+                ) as Record<string, string>),
+              },
+              body: manualPayload?.body,
               signal: options?.signal,
-              generationConfig: {
+            })
+            .then(async (response) => {
+              if (!response.ok) {
+                const rawError = await readResponseTextPreview(response);
+                const providerMessage = extractProviderErrorMessage(rawError);
+                throw new Error(
+                  `HTTP ${response.status}: ${
+                    providerMessage ||
+                    response.statusText ||
+                    'Text generation failed'
+                  }`
+                );
+              }
+              const rawText = await response.text();
+              let payload: unknown = rawText;
+              if (rawText.trim()) {
+                try {
+                  payload = JSON.parse(rawText);
+                } catch {
+                  payload = rawText;
+                }
+              }
+              return normalizeManualTextResponse(
+                payload,
+                manualHttpTemplate.responsePaths
+              );
+            })
+        : config.textConfig.protocol === 'google.generateContent'
+        ? await callGoogleGenerateContentRaw(config.textConfig, messages, {
+            stream: false,
+            signal: options?.signal,
+            generationConfig: {
+              ...(toNumber(extraParams?.temperature) !== undefined
+                ? { temperature: toNumber(extraParams?.temperature) }
+                : {}),
+              ...(toNumber(extraParams?.top_p) !== undefined
+                ? { topP: toNumber(extraParams?.top_p) }
+                : {}),
+              ...(toNumber(extraParams?.max_tokens) !== undefined
+                ? { maxOutputTokens: toNumber(extraParams?.max_tokens) }
+                : {}),
+              ...(typeof extraParams?.response_mime_type === 'string' &&
+              extraParams.response_mime_type.trim()
+                ? {
+                    responseMimeType: extraParams.response_mime_type.trim(),
+                  }
+                : {}),
+            },
+          })
+        : await providerTransport
+            .send(buildProviderContext(config.textConfig), {
+              path:
+                config.textConfig.binding?.submitPath || '/chat/completions',
+              baseUrlStrategy: config.textConfig.binding?.baseUrlStrategy,
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: modelName,
+                messages,
+                stream: false,
                 ...(toNumber(extraParams?.temperature) !== undefined
                   ? { temperature: toNumber(extraParams?.temperature) }
                   : {}),
                 ...(toNumber(extraParams?.top_p) !== undefined
-                  ? { topP: toNumber(extraParams?.top_p) }
+                  ? { top_p: toNumber(extraParams?.top_p) }
                   : {}),
                 ...(toNumber(extraParams?.max_tokens) !== undefined
-                  ? { maxOutputTokens: toNumber(extraParams?.max_tokens) }
+                  ? { max_tokens: toNumber(extraParams?.max_tokens) }
                   : {}),
-                ...(typeof extraParams?.response_mime_type === 'string' &&
-                extraParams.response_mime_type.trim()
-                  ? {
-                      responseMimeType: extraParams.response_mime_type.trim(),
-                    }
+                ...(typeof extraParams?.response_format === 'object'
+                  ? { response_format: extraParams.response_format }
                   : {}),
-              },
+              }),
+              signal: options?.signal,
             })
-          : await providerTransport
-              .send(buildProviderContext(config.textConfig), {
-                path: '/chat/completions',
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  model: modelName,
-                  messages,
-                  stream: false,
-                  ...(toNumber(extraParams?.temperature) !== undefined
-                    ? { temperature: toNumber(extraParams?.temperature) }
-                    : {}),
-                  ...(toNumber(extraParams?.top_p) !== undefined
-                    ? { top_p: toNumber(extraParams?.top_p) }
-                    : {}),
-                  ...(toNumber(extraParams?.max_tokens) !== undefined
-                    ? { max_tokens: toNumber(extraParams?.max_tokens) }
-                    : {}),
-                  ...(typeof extraParams?.response_format === 'object'
-                    ? { response_format: extraParams.response_format }
-                    : {}),
-                }),
-                signal: options?.signal,
-              })
-              .then(async (response) => {
-                if (!response.ok) {
-                  const rawError = await readResponseTextPreview(response);
-                  const providerMessage = extractProviderErrorMessage(rawError);
-                  throw new Error(
-                    `HTTP ${response.status}: ${
-                      providerMessage ||
-                      response.statusText ||
-                      'Text generation failed'
-                    }`
-                  );
-                }
-                return response.json();
-              });
+            .then(async (response) => {
+              if (!response.ok) {
+                const rawError = await readResponseTextPreview(response);
+                const providerMessage = extractProviderErrorMessage(rawError);
+                throw new Error(
+                  `HTTP ${response.status}: ${
+                    providerMessage ||
+                    response.statusText ||
+                    'Text generation failed'
+                  }`
+                );
+              }
+              return response.json();
+            });
 
-      const fullResponse = normalizeLlmTextContent(
-        data.choices?.[0]?.message?.content
-      );
+      const fullResponse = data.choices?.[0]?.message?.content || '';
       options?.onProgress?.({ progress: 100 });
       if (taskId) {
         await taskStorageWriter.completeTask(taskId, {

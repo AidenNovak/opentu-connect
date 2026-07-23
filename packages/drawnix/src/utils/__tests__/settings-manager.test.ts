@@ -738,4 +738,259 @@ describe('settings-manager', () => {
       preferAsyncImageEndpoint: false,
     });
   });
+
+  it('preserves provider catalog manual bindings after reload', async () => {
+    mockSettingsManagerDeps();
+
+    localStorage.setItem(
+      DRAWNIX_SETTINGS_KEY,
+      JSON.stringify({
+        gemini: {
+          apiKey: 'legacy-key',
+          baseUrl: 'https://api.tu-zi.com/v1',
+        },
+        providerProfiles: [
+          {
+            id: 'custom-provider',
+            name: 'Custom Provider',
+            providerType: 'openai-compatible',
+            baseUrl: 'https://api.example.com/v1',
+            apiKey: 'custom-key',
+            authType: 'bearer',
+            enabled: true,
+            capabilities: {},
+          },
+        ],
+        providerCatalogs: [
+          {
+            profileId: 'custom-provider',
+            discoveredAt: 1700000000000,
+            discoveredModels: [
+              {
+                id: 'custom-gpt-image',
+                label: 'Custom GPT Image',
+                shortLabel: 'Custom GPT Image',
+                type: 'image',
+                vendor: 'GPT',
+                tags: ['runtime', 'manual'],
+              },
+            ],
+            selectedModelIds: ['custom-gpt-image'],
+            manualBindings: [
+              {
+                id: 'custom-provider:custom-gpt-image:image:manual:custom-http',
+                modelId: 'custom-gpt-image',
+                operation: 'image',
+                protocol: 'custom-http',
+                requestSchema: 'custom-http',
+                responseSchema: 'custom-http.image',
+                submitPath: '/render',
+                priority: 900,
+                confidence: 'high',
+                source: 'manual',
+                metadata: {
+                  manualHttp: {
+                    method: 'POST',
+                    headers: {
+                      'X-Custom-Header': '{{params.traceId}}',
+                    },
+                    bodyType: 'json',
+                    bodyTemplate:
+                      '{"model":"{{model}}","prompt":"{{prompt}}","images":"{{images}}"}',
+                    responseKind: 'image',
+                    responsePaths: {
+                      imageUrls: 'result.images.*.url',
+                      error: 'error.message',
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      })
+    );
+
+    const { providerCatalogsSettings } = await import('../settings-manager');
+    const catalogs = providerCatalogsSettings.get();
+    const customCatalog = providerCatalogsSettings
+      .get()
+      .find((catalog) => catalog.profileId === 'custom-provider');
+
+    expect(customCatalog).toMatchObject({
+      manualBindings: [
+        {
+          id: 'custom-provider:custom-gpt-image:image:manual:custom-http',
+          modelId: 'custom-gpt-image',
+          operation: 'image',
+          protocol: 'custom-http',
+          requestSchema: 'custom-http',
+          responseSchema: 'custom-http.image',
+          submitPath: '/render',
+          priority: 900,
+          confidence: 'high',
+          source: 'manual',
+          metadata: {
+            manualHttp: {
+              method: 'POST',
+              bodyType: 'json',
+              responsePaths: {
+                imageUrls: 'result.images.*.url',
+                error: 'error.message',
+              },
+            },
+          },
+        },
+      ],
+    });
+
+    await providerCatalogsSettings.update(
+      catalogs.map((catalog) =>
+        catalog.profileId === 'custom-provider'
+          ? { ...catalog, signature: 'persisted-after-update' }
+          : catalog
+      )
+    );
+
+    vi.resetModules();
+    mockSettingsManagerDeps();
+
+    const reloaded = await import('../settings-manager');
+    const reloadedCatalog = reloaded.providerCatalogsSettings
+      .get()
+      .find((catalog) => catalog.profileId === 'custom-provider');
+
+    expect(reloadedCatalog).toMatchObject({
+      signature: 'persisted-after-update',
+      manualBindings: [
+        {
+          id: 'custom-provider:custom-gpt-image:image:manual:custom-http',
+          protocol: 'custom-http',
+          requestSchema: 'custom-http',
+          responseSchema: 'custom-http.image',
+          submitPath: '/render',
+          metadata: {
+            manualHttp: {
+              method: 'POST',
+              headers: {
+                'X-Custom-Header': '{{params.traceId}}',
+              },
+              bodyType: 'json',
+              bodyTemplate:
+                '{"model":"{{model}}","prompt":"{{prompt}}","images":"{{images}}"}',
+              responseKind: 'image',
+              responsePaths: {
+                imageUrls: 'result.images.*.url',
+                error: 'error.message',
+              },
+            },
+          },
+        },
+      ],
+    });
+  });
+
+  it('routes unscoped model ids to a unique reusable custom HTTP provider binding', async () => {
+    mockSettingsManagerDeps();
+
+    localStorage.setItem(
+      DRAWNIX_SETTINGS_KEY,
+      JSON.stringify({
+        gemini: {
+          apiKey: 'legacy-key',
+          baseUrl: 'https://api.tu-zi.com/v1',
+          imageModelName: 'image-2',
+        },
+        providerProfiles: [
+          {
+            id: 'custom-provider',
+            name: 'Custom Provider',
+            providerType: 'custom',
+            baseUrl: 'https://custom.example.com',
+            apiKey: 'custom-key',
+            authType: 'bearer',
+            enabled: true,
+            capabilities: {},
+          },
+        ],
+        providerCatalogs: [
+          {
+            profileId: 'custom-provider',
+            discoveredAt: 1700000000000,
+            discoveredModels: [
+              {
+                id: 'image2',
+                label: 'image2',
+                shortLabel: 'image2',
+                type: 'image',
+                vendor: 'OTHER',
+                tags: ['runtime', 'manual'],
+              },
+              {
+                id: 'image-2',
+                label: 'image-2',
+                shortLabel: 'image-2',
+                type: 'image',
+                vendor: 'OTHER',
+                tags: ['runtime', 'manual'],
+              },
+              {
+                id: 'gemini',
+                label: 'gemini',
+                shortLabel: 'gemini',
+                type: 'image',
+                vendor: 'GEMINI',
+                tags: ['runtime', 'manual'],
+              },
+            ],
+            selectedModelIds: ['image2', 'image-2', 'gemini'],
+            manualBindings: [
+              {
+                id: 'custom-provider:image2:image:manual:custom-http',
+                modelId: 'image2',
+                operation: 'image',
+                protocol: 'custom-http',
+                requestSchema: 'custom-http',
+                responseSchema: 'custom-http.image',
+                submitPath: '/render',
+                priority: 900,
+                confidence: 'high',
+                source: 'manual',
+                metadata: {
+                  manualHttp: {
+                    method: 'POST',
+                    bodyType: 'json',
+                    bodyTemplate: '{"model":"{{model}}","prompt":"{{prompt}}"}',
+                    responseKind: 'image',
+                    responsePaths: { imageUrls: 'data.*.url' },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      })
+    );
+
+    const { settingsManager } = await import('../settings-manager');
+
+    expect(
+      settingsManager.resolveInvocationRoute('image', 'image-2')
+    ).toMatchObject({
+      modelId: 'image-2',
+      profileId: 'custom-provider',
+      baseUrl: 'https://custom.example.com',
+      apiKey: 'custom-key',
+      source: 'preset',
+    });
+    expect(
+      settingsManager.resolveInvocationRoute('image', 'gemini')
+    ).toMatchObject({
+      modelId: 'gemini',
+      profileId: 'custom-provider',
+      baseUrl: 'https://custom.example.com',
+      apiKey: 'custom-key',
+      source: 'preset',
+    });
+  });
 });

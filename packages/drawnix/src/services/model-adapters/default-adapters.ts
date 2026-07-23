@@ -35,6 +35,7 @@ import { registerSeedreamAdapter } from './seedream-adapter';
 import { registerSeedanceAdapter } from './seedance-adapter';
 import { registerGPTImageAdapter } from './gpt-image-adapter';
 import { registerTuziGPTImageAdapter } from './tuzi-gpt-image-adapter';
+import { registerCustomHttpAdapters } from './custom-http-adapter';
 import {
   isGPTImage2Model,
   resolveImageResolutionTier,
@@ -336,6 +337,7 @@ export const sunoAudioAdapter: AudioModelAdapter = {
 };
 
 export function registerDefaultModelAdapters(): void {
+  registerCustomHttpAdapters();
   registerGPTImageAdapter();
   registerTuziGPTImageAdapter();
   registerModelAdapter(geminiImageAdapter);
