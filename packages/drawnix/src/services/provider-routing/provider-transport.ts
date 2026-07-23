@@ -25,10 +25,10 @@ const DEV_PROXY_HOSTS: readonly string[] = ['api.tu-zi.com'];
 
 function rewriteBaseUrlForDevProxy(baseUrl: string): string {
   try {
-    const isDev =
-      typeof import.meta !== 'undefined' &&
-      (import.meta as { env?: { DEV?: boolean; MODE?: string } }).env?.DEV &&
-      (import.meta as { env?: { MODE?: string } }).env?.MODE !== 'test';
+    // 必须直接读取 Vite 的内置环境常量。通过类型断言间接访问
+    // `import.meta.env` 会让生产构建错误地把 DEV 折叠为 true，进而把
+    // https://api.tu-zi.com/v1 改写成当前站点下的 /v1。
+    const isDev = import.meta.env.DEV && import.meta.env.MODE !== 'test';
     if (!isDev) return baseUrl;
     if (!/^https?:\/\//i.test(baseUrl)) return baseUrl;
 
