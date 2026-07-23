@@ -231,7 +231,7 @@ function parseCliArgs(argv) {
   let command = 'deploy';
   if (
     positional[0] &&
-    ['deploy', 'activate', 'rollback', 'promote', 'list', 'current'].includes(positional[0])
+    ['deploy', 'activate', 'rollback', 'promote', 'remove', 'list', 'current'].includes(positional[0])
   ) {
     command = positional.shift();
   }
@@ -240,6 +240,13 @@ function parseCliArgs(argv) {
   }
 
   return { command, options };
+}
+
+function validateVersion(version) {
+  if (!/^\d+\.\d+\.\d+$/.test(String(version || ''))) {
+    throw new Error(`版本格式无效: ${version || '(empty)'}`);
+  }
+  return version;
 }
 
 function bumpVersion(version, type) {
@@ -544,6 +551,40 @@ function promoteRelease(config, options) {
   console.log(`✅ 生产环境已切换到 ${version}`);
 }
 
+function removeRelease(config, options) {
+  const version = validateVersion(options.version);
+  const releasePath = path.posix.join(config.RELEASES_DIR, version);
+  const prereleaseVersion = getRemoteCurrentVersion(config);
+  const productionVersion = getRemoteProductionVersion(config);
+
+  if (version === prereleaseVersion) {
+    throw new Error(`不能删除当前预发布版本 ${version}`);
+  }
+  if (version === productionVersion) {
+    throw new Error(`不能删除当前生产版本 ${version}`);
+  }
+  if (!remoteVersionExists(config, version)) {
+    throw new Error(`远端版本 ${version} 不存在`);
+  }
+
+  console.log(`🗑️  删除历史版本: ${version}`);
+  if (options.dryRun) {
+    console.log(`🧪 dry-run: 将删除 ${releasePath}`);
+    return;
+  }
+
+  runRemoteCommand(
+    config,
+    [
+      `test "$(readlink -f ${shellEscape(path.posix.join(config.RELEASES_DIR, 'current'))})" != ${shellEscape(releasePath)}`,
+      `test "$(readlink -f ${shellEscape(path.posix.join(config.RELEASES_DIR, 'production'))})" != ${shellEscape(releasePath)}`,
+      `find ${shellEscape(releasePath)} -depth -delete`,
+      `test ! -e ${shellEscape(releasePath)}`,
+    ].join(' && ')
+  );
+  console.log(`✅ 已删除历史版本 ${version}`);
+}
+
 function currentRelease(config, options) {
   if (options.dryRun) {
     console.log('🧪 dry-run: 将查询当前版本');
@@ -578,6 +619,9 @@ function main() {
       break;
     case 'promote':
       promoteRelease(config, options);
+      break;
+    case 'remove':
+      removeRelease(config, options);
       break;
     case 'list':
       listRelease(config, options);

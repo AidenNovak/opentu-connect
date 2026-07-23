@@ -65,6 +65,7 @@
     "release:dry": "node scripts/release-manage.js --dry-run --skip-build --bump-if-exists=patch",
     "release:rollback": "node scripts/release-manage.js promote",
     "release:activate": "node scripts/release-manage.js activate",
+    "release:remove": "node scripts/release-manage.js remove",
     "release:list": "node scripts/release-manage.js list",
     "release:current": "node scripts/release-manage.js current",
     "release:preview": "pnpm build:web && npx serve -s dist/apps/web -l 7289",

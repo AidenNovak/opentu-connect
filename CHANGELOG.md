@@ -10,6 +10,8 @@
 
 ## 1.0.7 (2026-07-23)
 
+> **撤回说明：** 生产构建仍可能把供应商 API 地址改写到 PR 域名，已由 1.0.8 替代，禁止部署或回滚到此版本。
+
 ### 🔧 Chores
 
 - fix production provider API routing ([f3d41708](https://github.com/ljquan/aitu/commit/f3d41708))
@@ -19,6 +21,8 @@
 - gongchengtu <1817063960@qq.com>
 
 ## 1.0.6 (2026-07-23)
+
+> **撤回说明：** 包含有缺陷的供应商 API 路由构建，已从发布服务器移除，禁止部署或回滚到此版本。
 
 ### 🚀 Features
 

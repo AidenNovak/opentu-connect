@@ -23,6 +23,8 @@
           "fix production provider API routing"
         ]
       },
+      "status": "withdrawn",
+      "withdrawalReason": "生产构建仍可能把供应商 API 地址改写到 PR 域名，已由 1.0.8 替代，禁止部署或回滚到此版本。",
       "type": "patch",
       "highlights": "构建修复与稳定性改进"
     },
@@ -144,6 +146,8 @@
           "perf(changelog): 限制解析的版本数量以避免内存问题"
         ]
       },
+      "status": "withdrawn",
+      "withdrawalReason": "包含有缺陷的供应商 API 路由构建，已从发布服务器移除，禁止部署或回滚到此版本。",
       "type": "patch",
       "highlights": "add pr.opentu.ai prerelease staging with promote workflow"
     },

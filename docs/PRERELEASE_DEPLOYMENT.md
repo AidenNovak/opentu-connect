@@ -57,6 +57,16 @@ pnpm release:rollback --version=1.0.5  # 指定版本（完整参数）
 /home/opentu/releases/manage.sh promote 1.0.5  # 手动推送生产
 ```
 
+从本地安全删除未激活的历史版本：
+
+```bash
+pnpm release:remove 1.0.6
+node scripts/release-manage.js remove 1.0.6 --dry-run
+```
+
+`remove` 仅接受 `x.y.z` 格式的版本号，并会拒绝删除 `current`（预发布）或
+`production`（生产）正在使用的版本。已撤回的 `1.0.6`、`1.0.7` 不应重新部署。
+
 ## 注意事项
 
 - gateway (212.50.250.235) 对所有非 `car.tu-zi.com` 的 SNI 做 TCP passthrough 到 japan-server-2
