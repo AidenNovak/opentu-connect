@@ -1,6 +1,8 @@
 {
-  "version": "1.0.7",
-  "buildTime": "2026-07-23T09:17:46.255Z",
+  "version": "1.0.8",
+  "buildTime": "2026-07-23T09:25:33.569Z",
   "gitCommit": "unknown",
-  "changelog": []
+  "changelog": [
+    "fix restrict API dev proxy to local hosts"
+  ]
 }

@@ -1,3 +1,13 @@
+## 1.0.8 (2026-07-23)
+
+### 🔧 Chores
+
+- fix restrict API dev proxy to local hosts ([9e1efb87](https://github.com/ljquan/aitu/commit/9e1efb87))
+
+### ❤️  Thank You
+
+- gongchengtu <1817063960@qq.com>
+
 ## 1.0.7 (2026-07-23)
 
 ### 🔧 Chores
