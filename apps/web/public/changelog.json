@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "1.0.7",
+      "date": "2026-07-23",
+      "changes": {
+        "features": [],
+        "fixes": [],
+        "improvements": [
+          "fix production provider API routing"
+        ]
+      },
+      "type": "patch",
+      "highlights": "构建修复与稳定性改进"
+    },
+    {
       "version": "1.0.6",
       "date": "2026-07-23",
       "changes": {
@@ -1007,22 +1020,6 @@
       },
       "type": "patch",
       "highlights": "修正按需资源预缓存与预热分组"
-    },
-    {
-      "version": "0.6.65",
-      "date": "2026-04-24",
-      "changes": {
-        "features": [],
-        "fixes": [
-          "限制 app shell 仅匹配根壳页面",
-          "修复离线模式下懒加载模块资源未预热"
-        ],
-        "improvements": [
-          "更新版本号至0.6.64并修正回滚脚本参数顺序"
-        ]
-      },
-      "type": "patch",
-      "highlights": "限制 app shell 仅匹配根壳页面"
     }
   ]
 }

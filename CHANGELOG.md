@@ -1,3 +1,13 @@
+## 1.0.7 (2026-07-23)
+
+### 🔧 Chores
+
+- fix production provider API routing ([f3d41708](https://github.com/ljquan/aitu/commit/f3d41708))
+
+### ❤️  Thank You
+
+- gongchengtu <1817063960@qq.com>
+
 ## 1.0.6 (2026-07-23)
 
 ### 🚀 Features
