@@ -109,6 +109,16 @@ export interface ImageGenerationParams {
   pptSlidePrompt?: string;
   /** 重新生成时需要替换的旧整页图片元素 ID */
   pptReplaceElementId?: string;
+  /** 重新生成时需要原地替换的画布图片元素 ID */
+  replaceElementId?: string;
+  /** 目标绑定的画布图片元素 ID */
+  targetElementId?: string;
+  /** 目标绑定的图片生成 anchor ID */
+  anchorId?: string;
+  /** 目标替换任务的来源任务 ID */
+  sourceTaskId?: string;
+  /** 目标替换任务的来源提示词 */
+  sourcePrompt?: string;
   /** 是否自动插入画布 */
   autoInsertToCanvas?: boolean;
   /** 提示词历史轻量元数据 */
@@ -280,6 +290,11 @@ function getImageQueueConfig(params: ImageGenerationParams) {
         pptSlideImage: params.pptSlideImage,
         pptSlidePrompt: params.pptSlidePrompt,
         pptReplaceElementId: params.pptReplaceElementId,
+        replaceElementId: params.replaceElementId,
+        targetElementId: params.targetElementId,
+        anchorId: params.anchorId,
+        sourceTaskId: params.sourceTaskId,
+        sourcePrompt: params.sourcePrompt,
         promptMeta: params.promptMeta,
         assetMetadata: params.assetMetadata,
         knowledgeContextRefs: params.knowledgeContextRefs,

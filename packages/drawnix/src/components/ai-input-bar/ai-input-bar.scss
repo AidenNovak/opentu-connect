@@ -63,6 +63,11 @@ $ai-input-small-expanded-max-height: $ai-input-small-line-height * 6 +
   align-items: center;
   gap: 8px;
 
+  &--bound-image {
+    transform: translateX(-50%);
+    transition: top 0.18s ease, left 0.18s ease, bottom 0.18s ease;
+  }
+
   // 当有灵感板时，移除 gap 实现无缝连接，并添加统一阴影
   &--with-inspiration {
     gap: 0;
@@ -97,6 +102,21 @@ $ai-input-small-expanded-max-height: $ai-input-small-line-height * 6 +
     width: 100%; // 占满第一行
     flex-shrink: 0;
     box-sizing: border-box;
+  }
+
+  &__bound-status {
+    width: calc(100% - 24px);
+    margin-left: 12px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.35;
+
+    &--failed {
+      border: 1px solid rgba(220, 38, 38, 0.24);
+      background: rgba(254, 242, 242, 0.92);
+      color: #991b1b;
+    }
   }
 
   &__processing {
@@ -1548,6 +1568,12 @@ $ai-input-small-expanded-max-height: $ai-input-small-line-height * 6 +
 
 // Dark mode for prompt suggestion panel
 :root[data-theme='dark'] {
+  .ai-input-bar__bound-status--failed {
+    border-color: rgba(248, 113, 113, 0.3);
+    background: rgba(127, 29, 29, 0.32);
+    color: #fecaca;
+  }
+
   .prompt-suggestion-panel {
     background: var(--color-surface-high, #2a2a2a);
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
@@ -1616,6 +1642,14 @@ $ai-input-small-expanded-max-height: $ai-input-small-line-height * 6 +
     max-width: calc(100% - 80px); // 给左侧工具栏留空间
     left: calc(50% + 30px); // 稍微右偏以避开工具栏
 
+    &--bound-image {
+      top: auto !important;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+      left: calc(50% + 30px) !important;
+      width: 100% !important;
+      max-width: calc(100% - 80px) !important;
+    }
+
     &__container {
       padding: 6px 8px;
       border-radius: 20px;
@@ -1648,6 +1682,14 @@ $ai-input-small-expanded-max-height: $ai-input-small-line-height * 6 +
     transform: translateX(-50%);
     max-width: calc(100% - 16px);
     width: 100%;
+
+    &--bound-image {
+      top: auto !important;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
+      left: 50% !important;
+      width: 100% !important;
+      max-width: calc(100% - 16px) !important;
+    }
 
     &__content-preview {
       gap: 4px;
