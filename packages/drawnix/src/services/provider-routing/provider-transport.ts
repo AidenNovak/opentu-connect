@@ -22,13 +22,22 @@ function trimTrailingSlashes(value: string): string {
  * 需与 apps/web/vite.config.ts 中的 server.proxy 配置配套使用。
  */
 const DEV_PROXY_HOSTS: readonly string[] = ['api.tu-zi.com'];
+const LOCAL_DEV_HOSTS: readonly string[] = ['localhost', '127.0.0.1', '::1'];
+
+function isLocalDevRuntime(): boolean {
+  const hostname = globalThis.location?.hostname;
+  return typeof hostname === 'string' && LOCAL_DEV_HOSTS.includes(hostname);
+}
 
 function rewriteBaseUrlForDevProxy(baseUrl: string): string {
   try {
     // 必须直接读取 Vite 的内置环境常量。通过类型断言间接访问
     // `import.meta.env` 会让生产构建错误地把 DEV 折叠为 true，进而把
     // https://api.tu-zi.com/v1 改写成当前站点下的 /v1。
-    const isDev = import.meta.env.DEV && import.meta.env.MODE !== 'test';
+    const isDev =
+      import.meta.env.DEV &&
+      import.meta.env.MODE !== 'test' &&
+      isLocalDevRuntime();
     if (!isDev) return baseUrl;
     if (!/^https?:\/\//i.test(baseUrl)) return baseUrl;
 
