@@ -1,6 +1,5 @@
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { useDeviceType } from '../../hooks/useDeviceType';
-import '../ai-input-bar/ai-input-bar.scss';
 import './settings-dialog.scss';
 import {
   memo,
@@ -3336,18 +3335,18 @@ export const SettingsDialog = ({
                 placeholder={TUZI_PROVIDER_DEFAULT_BASE_URL}
               />
               {isSelectedTuziProfile ? (
-                <div className="settings-dialog__endpoint-panel ai-input-bar__site-panel">
-                  <div className="ai-input-bar__site-panel-toolbar">
-                    <div className="ai-input-bar__site-title">
-                      <div className="ai-input-bar__site-count">
+                <div className="settings-dialog__endpoint-panel">
+                  <div className="settings-dialog__endpoint-toolbar">
+                    <div className="settings-dialog__endpoint-title">
+                      <div className="settings-dialog__endpoint-count">
                         {endpointOptions.length} 个端点
                       </div>
-                      <div className="ai-input-bar__site-source">
+                      <div className="settings-dialog__endpoint-source">
                         来源: tuzi-api
                       </div>
                     </div>
-                    <div className="ai-input-bar__site-actions">
-                      <label className="ai-input-bar__site-auto">
+                    <div className="settings-dialog__endpoint-actions">
+                      <label className="settings-dialog__endpoint-auto">
                         <input
                           type="checkbox"
                           checked={endpointSelectionMode === 'auto'}
@@ -3359,7 +3358,7 @@ export const SettingsDialog = ({
                       </label>
                       <button
                         type="button"
-                        className="ai-input-bar__site-test-btn"
+                        className="settings-dialog__endpoint-test-btn"
                         onClick={() => void handleRunEndpointSpeedTest()}
                         disabled={
                           isEndpointTesting || endpointOptions.length === 0
@@ -3368,7 +3367,7 @@ export const SettingsDialog = ({
                         {isEndpointTesting ? (
                           <Loader2
                             size={14}
-                            className="ai-input-bar__site-spin"
+                            className="settings-dialog__endpoint-spin"
                           />
                         ) : (
                           <Zap size={15} />
@@ -3378,7 +3377,7 @@ export const SettingsDialog = ({
                     </div>
                   </div>
 
-                  <div className="ai-input-bar__site-list">
+                  <div className="settings-dialog__endpoint-list">
                     {endpointOptions.map((endpoint) => {
                       const selected =
                         endpoint.url === activeEndpoint.url ||
@@ -3405,9 +3404,13 @@ export const SettingsDialog = ({
                           key={endpoint.id}
                           role="button"
                           tabIndex={0}
-                          className={classNames('ai-input-bar__site-row', {
-                            'ai-input-bar__site-row--selected': selected,
-                          })}
+                          className={classNames(
+                            'settings-dialog__endpoint-row',
+                            {
+                              'settings-dialog__endpoint-row--selected':
+                                selected,
+                            }
+                          )}
                           onClick={() => {
                             handleEndpointSelect(endpoint.url, 'manual');
                           }}
@@ -3418,29 +3421,29 @@ export const SettingsDialog = ({
                             }
                           }}
                         >
-                          <span className="ai-input-bar__site-row-dot" />
-                          <span className="ai-input-bar__site-row-copy">
-                            <span className="ai-input-bar__site-row-name">
+                          <span className="settings-dialog__endpoint-row-dot" />
+                          <span className="settings-dialog__endpoint-row-copy">
+                            <span className="settings-dialog__endpoint-row-name">
                               {endpoint.name || endpoint.shortLabel}
                             </span>
-                            <span className="ai-input-bar__site-row-url">
+                            <span className="settings-dialog__endpoint-row-url">
                               {endpoint.url}
                             </span>
                             {endpoint.description ? (
-                              <span className="ai-input-bar__site-row-desc">
+                              <span className="settings-dialog__endpoint-row-desc">
                                 {endpoint.description}
                               </span>
                             ) : null}
                           </span>
                           <span
                             className={classNames(
-                              'ai-input-bar__site-row-latency',
+                              'settings-dialog__endpoint-row-latency',
                               {
-                                'ai-input-bar__site-row-latency--fast':
+                                'settings-dialog__endpoint-row-latency--fast':
                                   latencyState === 'fast',
-                                'ai-input-bar__site-row-latency--slow':
+                                'settings-dialog__endpoint-row-latency--slow':
                                   latencyState === 'slow',
-                                'ai-input-bar__site-row-latency--failed':
+                                'settings-dialog__endpoint-row-latency--failed':
                                   latencyState === 'failed',
                               }
                             )}
@@ -3448,7 +3451,7 @@ export const SettingsDialog = ({
                             {isEndpointTesting && latency == null ? (
                               <Loader2
                                 size={14}
-                                className="ai-input-bar__site-spin"
+                                className="settings-dialog__endpoint-spin"
                               />
                             ) : (
                               latencyText
@@ -3457,7 +3460,7 @@ export const SettingsDialog = ({
                           {endpoint.removable ? (
                             <button
                               type="button"
-                              className="ai-input-bar__site-remove"
+                              className="settings-dialog__endpoint-remove"
                               onClick={(event) => {
                                 event.preventDefault();
                                 event.stopPropagation();
@@ -3467,7 +3470,7 @@ export const SettingsDialog = ({
                               <X size={17} />
                             </button>
                           ) : (
-                            <span className="ai-input-bar__site-remove-placeholder">
+                            <span className="settings-dialog__endpoint-remove-placeholder">
                               —
                             </span>
                           )}
@@ -3476,7 +3479,7 @@ export const SettingsDialog = ({
                     })}
                   </div>
 
-                  <div className="ai-input-bar__site-add">
+                  <div className="settings-dialog__endpoint-add">
                     <input
                       value={customEndpointUrl}
                       placeholder="https://api.example.com"
@@ -3493,19 +3496,19 @@ export const SettingsDialog = ({
                     />
                     <button
                       type="button"
-                      className="ai-input-bar__site-add-btn"
+                      className="settings-dialog__endpoint-add-btn"
                       onClick={handleAddCustomEndpoint}
                     >
                       <Plus size={18} />
                     </button>
                   </div>
                   {endpointAddError ? (
-                    <div className="ai-input-bar__site-error">
+                    <div className="settings-dialog__endpoint-error">
                       {endpointAddError}
                     </div>
                   ) : null}
                   {tuziApiEndpointLoadError ? (
-                    <div className="ai-input-bar__site-error">
+                    <div className="settings-dialog__endpoint-error">
                       {tuziApiEndpointLoadError}
                     </div>
                   ) : null}

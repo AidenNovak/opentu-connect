@@ -1040,7 +1040,7 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
       },
-      '/log': {
+      '/log/get-request': {
         target: 'https://api.tu-zi.com',
         changeOrigin: true,
         secure: true,
