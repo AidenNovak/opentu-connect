@@ -1,8 +1,9 @@
 {
-  "version": "1.0.8",
-  "buildTime": "2026-07-23T09:25:33.569Z",
-  "gitCommit": "unknown",
+  "version": "1.0.9",
+  "buildTime": "2026-07-27T15:36:14.942Z",
+  "gitCommit": "2b39eaf2f85d418a7564b4d4bb78bcc564411924",
   "changelog": [
-    "fix restrict API dev proxy to local hosts"
+    "图片请求使用稳定任务 ID (#205)",
+    "支持批量出图预览删除单张结果 (#204)"
   ]
 }

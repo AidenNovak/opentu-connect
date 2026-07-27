@@ -1,6 +1,22 @@
 {
   "versions": [
     {
+      "version": "1.0.9",
+      "date": "2026-07-27",
+      "changes": {
+        "features": [
+          "图片请求使用稳定任务 ID (#205)",
+          "支持批量出图预览删除单张结果 (#204)"
+        ],
+        "fixes": [],
+        "improvements": [
+          "撤回不安全的发布版本"
+        ]
+      },
+      "type": "patch",
+      "highlights": "图片请求使用稳定任务 ID (#205)"
+    },
+    {
       "version": "1.0.8",
       "date": "2026-07-23",
       "changes": {
@@ -1011,19 +1027,6 @@
       },
       "type": "patch",
       "highlights": "完善 GPT Image 兼容链路"
-    },
-    {
-      "version": "0.6.68",
-      "date": "2026-04-24",
-      "changes": {
-        "features": [],
-        "fixes": [
-          "修正跨域静态资源离线缓存命中"
-        ],
-        "improvements": []
-      },
-      "type": "patch",
-      "highlights": "修正跨域静态资源离线缓存命中"
     }
   ]
 }

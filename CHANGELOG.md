@@ -1,3 +1,19 @@
+## 1.0.9 (2026-07-27)
+
+### 🚀 Features
+
+- 图片请求使用稳定任务 ID (#205) ([2b39eaf2](https://github.com/ljquan/opentu/commit/2b39eaf2))
+- 支持批量出图预览删除单张结果 (#204) ([f70251d1](https://github.com/ljquan/opentu/commit/f70251d1))
+
+### 🔧 Chores
+
+- 撤回不安全的发布版本 ([508c8b3f](https://github.com/ljquan/opentu/commit/508c8b3f))
+
+### ❤️  Thank You
+
+- selwen-0102 <2548530499@qq.com>
+- gongchengtu <1817063960@qq.com>
+
 ## 1.0.8 (2026-07-23)
 
 ### 🔧 Chores
