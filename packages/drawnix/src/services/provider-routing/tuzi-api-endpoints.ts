@@ -6,6 +6,28 @@ export interface TuziApiEndpointSource {
 
 export const TUZI_API_SOURCE_URL = 'https://github.com/tuziapi/tuzi-api';
 export const TUZI_API_STATUS_URL = 'https://api.tu-zi.com/api/status';
+export const TUZI_API_REQUEST_ID_CORS_ENDPOINTS: TuziApiEndpointSource[] = [
+  {
+    name: '公网请求 ID 节点 1',
+    url: 'https://bus.tu-zi.com',
+    description: '公网跨域请求 ID 主节点',
+  },
+  {
+    name: '公网请求 ID 节点 2',
+    url: 'https://bus2.tu-zi.com',
+    description: '公网跨域请求 ID 备用节点',
+  },
+  {
+    name: '公网请求 ID 节点 3',
+    url: 'https://bus3.tu-zi.com',
+    description: '公网跨域请求 ID 备用节点',
+  },
+  {
+    name: '公网请求 ID 节点 4',
+    url: 'https://business.tu-zi.com',
+    description: '公网跨域请求 ID 备用节点',
+  },
+];
 export const TUZI_API_FALLBACK_ENDPOINTS: TuziApiEndpointSource[] = [
   {
     name: '主站点',
@@ -56,13 +78,24 @@ export function normalizeTuziApiEndpointUrl(url?: string | null): string {
 }
 
 const TRUSTED_TUZI_API_ORIGINS = new Set(
-  TUZI_API_FALLBACK_ENDPOINTS.map((endpoint) =>
+  [...TUZI_API_FALLBACK_ENDPOINTS, ...TUZI_API_REQUEST_ID_CORS_ENDPOINTS].map(
+    (endpoint) =>
+      normalizeTuziApiEndpointUrl(endpoint.url)
+  )
+);
+
+const TUZI_REQUEST_ID_CORS_ORIGINS = new Set(
+  TUZI_API_REQUEST_ID_CORS_ENDPOINTS.map((endpoint) =>
     normalizeTuziApiEndpointUrl(endpoint.url)
   )
 );
 
 export function isTrustedTuziApiBaseUrl(url?: string | null): boolean {
   return TRUSTED_TUZI_API_ORIGINS.has(normalizeTuziApiEndpointUrl(url));
+}
+
+export function isTuziRequestIdCorsBaseUrl(url?: string | null): boolean {
+  return TUZI_REQUEST_ID_CORS_ORIGINS.has(normalizeTuziApiEndpointUrl(url));
 }
 
 export function isTuziCompatibleBaseUrl(url?: string | null): boolean {

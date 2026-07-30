@@ -8,6 +8,15 @@ import {
 } from '../provider-routing';
 import { providerTransport } from '../provider-routing';
 import { canAttachProviderRequestIdHeader } from '../provider-routing';
+import {
+  isLocalDevHostname,
+  rewriteTuziBaseUrlForSameOriginProxy,
+  supportsTuziSameOriginProxyHostname,
+} from '../provider-routing/provider-transport';
+import {
+  TUZI_API_FALLBACK_ENDPOINTS,
+  TUZI_API_REQUEST_ID_CORS_ENDPOINTS,
+} from '../provider-routing/tuzi-api-endpoints';
 import type {
   InvocationPlannerRepositories,
   ProviderModelBinding,
@@ -38,6 +47,112 @@ function createRepositories(params: {
 }
 
 describe('provider routing', () => {
+  it.each([
+    'localhost',
+    '127.0.0.1',
+    '::1',
+    '10.0.0.8',
+    '172.16.0.8',
+    '172.31.255.8',
+    '192.168.50.225',
+  ])('recognizes local development hostname %s', (hostname) => {
+    expect(isLocalDevHostname(hostname)).toBe(true);
+  });
+
+  it.each(['172.15.0.8', '172.32.0.8', '8.8.8.8', 'example.com'])(
+    'does not treat public hostname %s as local development',
+    (hostname) => {
+      expect(isLocalDevHostname(hostname)).toBe(false);
+    }
+  );
+
+  it('enables fixed same-origin proxy hosts without opening arbitrary origins', () => {
+    expect(supportsTuziSameOriginProxyHostname('192.168.50.225', true)).toBe(
+      true
+    );
+    expect(supportsTuziSameOriginProxyHostname('pr.opentu.ai', false)).toBe(
+      true
+    );
+    expect(
+      supportsTuziSameOriginProxyHostname('preview.vercel.app', false)
+    ).toBe(true);
+    expect(supportsTuziSameOriginProxyHostname('example.com', false)).toBe(
+      false
+    );
+    expect(
+      supportsTuziSameOriginProxyHostname('custom.example.com', false, true)
+    ).toBe(true);
+  });
+
+  it.each([
+    ['api.tu-zi.com', 'api'],
+    ['apius.tu-zi.com', 'apius'],
+    ['apicdn.tu-zi.com', 'apicdn'],
+    ['api.sydney-ai.com', 'sydney'],
+    ['api.ourzhishi.top', 'ourzhishi'],
+    ['apisz.ourzhishi.top', 'ourzhishi-sz'],
+  ])('preserves trusted node %s through fixed route %s', (host, route) => {
+    expect(
+      rewriteTuziBaseUrlForSameOriginProxy(
+        `https://${host}/v1`,
+        '192.168.50.225',
+        true
+      )
+    ).toBe(`/__opentu_tuzi_proxy__/${route}/v1`);
+  });
+
+  it('never turns the fixed proxy into an arbitrary target proxy', () => {
+    expect(
+      rewriteTuziBaseUrlForSameOriginProxy(
+        'https://images.example.com/v1',
+        'custom.example.com',
+        false,
+        true
+      )
+    ).toBe('https://images.example.com/v1');
+  });
+
+  it('reports a proxy configuration error instead of parsing SPA HTML as JSON', async () => {
+    vi.stubGlobal('location', { hostname: 'opentu.ai' });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('<!doctype html><html></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      })
+    );
+
+    try {
+      await expect(
+        providerTransport.send(
+          {
+            profileId: 'provider-tuzi',
+            profileName: 'Tuzi',
+            providerType: 'openai-compatible',
+            baseUrl: 'https://api.tu-zi.com/v1',
+            apiKey: 'secret',
+            authType: 'bearer',
+          },
+          {
+            path: '/images/generations',
+            method: 'POST',
+            requestId: 'proxy-html-task-id',
+            fetcher,
+          }
+        )
+      ).rejects.toThrow('Tuzi 同源代理未生效');
+      expect(String(fetcher.mock.calls[0]?.[0])).toBe(
+        '/__opentu_tuzi_proxy__/api/v1/images/generations'
+      );
+      expect(
+        (fetcher.mock.calls[0]?.[1]?.headers as Record<string, string>)[
+          'X-Request-Id'
+        ]
+      ).toBe('proxy-html-task-id');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('plans the highest-priority binding for the selected provider model', () => {
     const planner = new InvocationPlanner(
       createRepositories({
@@ -444,10 +559,14 @@ describe('provider routing', () => {
       }
     );
 
-    expect(prepared.headers['X-Request-Id']).toBeUndefined();
+    expect(
+      Object.keys(prepared.headers).some(
+        (name) => name.toLowerCase() === 'x-request-id'
+      )
+    ).toBe(false);
   });
 
-  it('only enables Tuzi request ID headers for same-origin requests', () => {
+  it('routes public Request-ID submissions to a CORS-compatible Tuzi node', () => {
     const context: ProviderProfileSnapshot = {
       id: 'provider-tuzi',
       name: 'Tuzi',
@@ -456,22 +575,164 @@ describe('provider routing', () => {
       apiKey: 'secret',
       authType: 'bearer',
     };
-    const request = { path: '/images/generations' };
+    const request = {
+      path: '/images/generations',
+      method: 'POST',
+      requestId: 'public-task-id',
+    };
+
+    expect(canAttachProviderRequestIdHeader(context, request)).toBe(false);
+
+    const prepared = providerTransport.prepareRequest(context, request);
+    expect(prepared.url).toBe('https://bus.tu-zi.com/v1/images/generations');
+    expect(prepared.headers['X-Request-Id']).toBe('public-task-id');
+  });
+
+  it('does not mix Request-ID CORS nodes into normal Tuzi fallback routing', () => {
+    const normalOrigins = new Set(
+      TUZI_API_FALLBACK_ENDPOINTS.map(({ url }) => new URL(url).origin)
+    );
+
+    for (const { url } of TUZI_API_REQUEST_ID_CORS_ENDPOINTS) {
+      expect(normalOrigins.has(new URL(url).origin)).toBe(false);
+    }
+  });
+
+  it.each(TUZI_API_REQUEST_ID_CORS_ENDPOINTS)(
+    'keeps Request-ID submission on compatible node $url',
+    ({ url }) => {
+      const context: ProviderProfileSnapshot = {
+        id: 'provider-tuzi',
+        name: 'Tuzi',
+        providerType: 'openai-compatible',
+        baseUrl: `${url}/v1`,
+        apiKey: 'secret',
+        authType: 'bearer',
+      };
+      const request = {
+        path: '/images/generations',
+        method: 'POST',
+        requestId: 'compatible-task-id',
+      };
+
+      expect(canAttachProviderRequestIdHeader(context, request)).toBe(true);
+      const prepared = providerTransport.prepareRequest(context, request);
+      expect(prepared.url).toBe(`${url}/v1/images/generations`);
+      expect(prepared.headers['X-Request-Id']).toBe('compatible-task-id');
+    }
+  );
+
+  it('never retries a Request-ID submission on another node', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValue(new Error('Failed to fetch'));
+
+    await expect(
+      providerTransport.send(
+        {
+          profileId: 'provider-tuzi',
+          profileName: 'Tuzi',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.tu-zi.com/v1',
+          apiKey: 'secret',
+          authType: 'bearer',
+        },
+        {
+          path: '/images/generations',
+          method: 'POST',
+          requestId: 'single-submit-task-id',
+          fetcher,
+        }
+      )
+    ).rejects.toThrow('Failed to fetch');
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe(
+      'https://bus.tu-zi.com/v1/images/generations'
+    );
+  });
+
+  it('removes Request ID headers from trusted Tuzi GET requests', () => {
+    const prepared = providerTransport.prepareRequest(
+      {
+        profileId: 'provider-tuzi',
+        profileName: 'Tuzi',
+        providerType: 'openai-compatible',
+        baseUrl: 'https://bus.tu-zi.com/v1',
+        apiKey: 'secret',
+        authType: 'bearer',
+        extraHeaders: { 'x-request-id': 'stale-profile-id' },
+      },
+      {
+        path: '/images/generations/result',
+        method: 'GET',
+        headers: { 'X-REQUEST-ID': 'stale-request-id' },
+        requestId: 'task-id-that-must-not-be-sent',
+      }
+    );
 
     expect(
-      canAttachProviderRequestIdHeader(
-        context,
-        request,
-        'https://opentu.example.com'
+      Object.keys(prepared.headers).some(
+        (name) => name.toLowerCase() === 'x-request-id'
       )
     ).toBe(false);
+  });
+
+  it('keeps normal node fallback for GET requests even if a Request ID was provided', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new Error('Failed to fetch'))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+
+    await providerTransport.send(
+      {
+        profileId: 'provider-tuzi',
+        profileName: 'Tuzi',
+        providerType: 'openai-compatible',
+        baseUrl: 'https://api.tu-zi.com/v1',
+        apiKey: 'secret',
+        authType: 'bearer',
+      },
+      {
+        path: '/images/generations/result',
+        method: 'GET',
+        requestId: 'get-request-id-that-must-not-change-routing',
+        fetcher,
+      }
+    );
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(String(fetcher.mock.calls[1]?.[0])).toBe(
+      'https://apius.tu-zi.com/v1/images/generations/result'
+    );
+  });
+
+  it('does not leak Request ID to an absolute third-party path', () => {
+    const prepared = providerTransport.prepareRequest(
+      {
+        profileId: 'provider-tuzi',
+        profileName: 'Tuzi',
+        providerType: 'openai-compatible',
+        baseUrl: 'https://api.tu-zi.com/v1',
+        apiKey: 'secret',
+        authType: 'bearer',
+        extraHeaders: { 'x-request-id': 'stale-profile-request-id' },
+      },
+      {
+        path: 'https://images.example.com/v1/images/generations',
+        method: 'POST',
+        requestId: 'task-id-that-must-not-leak',
+      }
+    );
+
+    expect(prepared.url).toBe(
+      'https://images.example.com/v1/images/generations'
+    );
     expect(
-      canAttachProviderRequestIdHeader(
-        context,
-        request,
-        'https://api.tu-zi.com'
+      Object.keys(prepared.headers).some(
+        (name) => name.toLowerCase() === 'x-request-id'
       )
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('prepares query-auth transport requests', () => {

@@ -334,7 +334,9 @@ describe('Media Executor Module', () => {
         };
       });
       vi.doMock('../provider-routing', async (importOriginal) => {
-        const actual = await importOriginal<typeof import('../provider-routing')>();
+        const actual = await importOriginal<
+          typeof import('../provider-routing')
+        >();
         return {
           ...actual,
           providerTransport: { send },
@@ -413,9 +415,13 @@ describe('Media Executor Module', () => {
           },
         };
       });
-      vi.doMock('../provider-routing', () => ({
-        resolveInvocationPlanFromRoute: vi.fn(() => null),
-      }));
+      vi.doMock('../provider-routing', async (importOriginal) => {
+        const actual = await importOriginal<typeof import('../provider-routing')>();
+        return {
+          ...actual,
+          resolveInvocationPlanFromRoute: vi.fn(() => null),
+        };
+      });
       vi.doMock('../model-adapters', () => ({
         resolveAdapterForInvocation,
         getAdapterContextFromSettings: vi.fn(),
