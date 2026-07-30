@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "1.0.10",
+      "date": "2026-07-30",
+      "changes": {
+        "features": [
+          "图片请求中断后按 Request ID 自动恢复轮询 (#206)"
+        ],
+        "fixes": [],
+        "improvements": []
+      },
+      "type": "patch",
+      "highlights": "图片请求中断后按 Request ID 自动恢复轮询 (#206)"
+    },
+    {
       "version": "1.0.9",
       "date": "2026-07-27",
       "changes": {
@@ -1004,29 +1017,6 @@
       },
       "type": "patch",
       "highlights": "确保更新安装时所有预缓存资源就绪后再提示升级"
-    },
-    {
-      "version": "0.6.70",
-      "date": "2026-04-24",
-      "changes": {
-        "features": [
-          "完善 GPT Image 兼容链路"
-        ],
-        "fixes": [
-          "收口预缓存并补齐按需工具离线资源",
-          "接力完整离线补齐并清理 drawnix tsc",
-          "修正跨域静态资源离线缓存命中",
-          "修正按需资源预缓存与预热分组",
-          "限制 app shell 仅匹配根壳页面",
-          "修复离线模式下懒加载模块资源未预热",
-          "修复 GPT Image 适配器 readonly 元组类型不兼容和灵感图缺少 imageQuality 默认值"
-        ],
-        "improvements": [
-          "更新版本号至0.6.69并刷新构建时间"
-        ]
-      },
-      "type": "patch",
-      "highlights": "完善 GPT Image 兼容链路"
     }
   ]
 }

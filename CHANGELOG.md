@@ -1,3 +1,13 @@
+## 1.0.10 (2026-07-30)
+
+### 🚀 Features
+
+- 图片请求中断后按 Request ID 自动恢复轮询 (#206) ([a1096831](https://github.com/ljquan/opentu/commit/a1096831))
+
+### ❤️  Thank You
+
+- selwen-0102 <2548530499@qq.com>
+
 ## 1.0.9 (2026-07-27)
 
 ### 🚀 Features
