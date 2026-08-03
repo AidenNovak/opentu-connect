@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "1.0.11",
+      "date": "2026-08-03",
+      "changes": {
+        "features": [],
+        "fixes": [
+          "展示上游图片实际尺寸 (#207)"
+        ],
+        "improvements": []
+      },
+      "type": "patch",
+      "highlights": "展示上游图片实际尺寸 (#207)"
+    },
+    {
       "version": "1.0.10",
       "date": "2026-07-30",
       "changes": {
@@ -1002,21 +1015,6 @@
       },
       "type": "patch",
       "highlights": "修复版本更新条假升级与 SW 提交时序"
-    },
-    {
-      "version": "0.6.72",
-      "date": "2026-04-24",
-      "changes": {
-        "features": [],
-        "fixes": [
-          "确保更新安装时所有预缓存资源就绪后再提示升级"
-        ],
-        "improvements": [
-          "perf(sw): 优化空闲预取机制并移除调试日志"
-        ]
-      },
-      "type": "patch",
-      "highlights": "确保更新安装时所有预缓存资源就绪后再提示升级"
     }
   ]
 }

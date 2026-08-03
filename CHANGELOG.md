@@ -1,3 +1,13 @@
+## 1.0.11 (2026-08-03)
+
+### 🩹 Fixes
+
+- 展示上游图片实际尺寸 (#207) ([9c087628](https://github.com/ljquan/aitu/commit/9c087628))
+
+### ❤️  Thank You
+
+- selwen-0102 <2548530499@qq.com>
+
 ## 1.0.10 (2026-07-30)
 
 ### 🚀 Features

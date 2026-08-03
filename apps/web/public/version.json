@@ -1,8 +1,8 @@
 {
-  "version": "1.0.10",
-  "buildTime": "2026-07-30T10:04:45.000Z",
-  "gitCommit": "a109683127fd528b4926ea692a65931dd6fe83d1",
+  "version": "1.0.11",
+  "buildTime": "2026-08-03T15:53:15.632Z",
+  "gitCommit": "9c087628476a7c93019748e339040ea0572de5dd",
   "changelog": [
-    "图片请求中断后按 Request ID 自动恢复轮询 (#206)"
+    "展示上游图片实际尺寸 (#207)"
   ]
 }
