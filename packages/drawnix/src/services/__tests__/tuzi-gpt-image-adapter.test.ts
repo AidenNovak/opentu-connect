@@ -15,6 +15,43 @@ vi.mock('../model-adapters/context', () => ({
 describe('tuzi GPT image adapter', () => {
   afterEach(() => {
     mocks.sendAdapterRequest.mockReset();
+    vi.unstubAllGlobals();
+  });
+
+  it('reads the final upstream image size when Tuzi omits dimension metadata', async () => {
+    class StubImage {
+      naturalWidth = 1024;
+      naturalHeight = 1536;
+      decoding = 'auto';
+      referrerPolicy = '';
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal('Image', StubImage);
+    mocks.sendAdapterRequest.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [{ url: 'https://example.com/tuzi.png' }],
+      }),
+    });
+
+    const result = await tuziGPTImageAdapter.generateImage(
+      {
+        baseUrl: 'https://api.tu-zi.com/v1',
+        apiKey: 'test-key',
+        authType: 'bearer',
+      },
+      {
+        model: 'gpt-image-2',
+        prompt: '兔子',
+      }
+    );
+
+    expect(result).toMatchObject({ width: 1024, height: 1536 });
   });
 
   it('builds the Tuzi GPT request body with official GPT size and quality semantics', () => {
@@ -61,7 +98,13 @@ describe('tuzi GPT image adapter', () => {
     mocks.sendAdapterRequest.mockResolvedValue({
       ok: true,
       json: async () => ({
-        data: [{ url: 'https://example.com/tuzi.png' }],
+        data: [
+          {
+            url: 'https://example.com/tuzi.png',
+            width: 1024,
+            height: 1024,
+          },
+        ],
       }),
     });
 
@@ -113,7 +156,7 @@ describe('tuzi GPT image adapter', () => {
     mocks.sendAdapterRequest.mockResolvedValue({
       ok: true,
       json: async () => ({
-        data: [{ b64_json: 'ZmFrZQ==' }],
+        data: [{ b64_json: 'ZmFrZQ==', width: 2736, height: 1536 }],
       }),
     });
 
@@ -167,7 +210,13 @@ describe('tuzi GPT image adapter', () => {
     mocks.sendAdapterRequest.mockResolvedValue({
       ok: true,
       json: async () => ({
-        data: [{ url: 'https://example.com/tuzi-edit.png' }],
+        data: [
+          {
+            url: 'https://example.com/tuzi-edit.png',
+            width: 1024,
+            height: 1024,
+          },
+        ],
       }),
     });
 
