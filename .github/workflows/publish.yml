@@ -60,4 +60,6 @@ jobs:
           file: Dockerfile
           outputs: "type=registry,push=true"
           platforms: linux/amd64, linux/arm64
+          build-args: |
+            GITHUB_SHA=${{ github.sha }}
           tags: ${{ env.IMAGE_TAGS }}

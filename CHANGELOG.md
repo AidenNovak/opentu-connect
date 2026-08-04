@@ -1,3 +1,23 @@
+## 1.0.12 (2026-08-04)
+
+### 🚀 Features
+
+- 增加网站本地数据清理入口 (#212) ([e780ab9a](https://github.com/ljquan/opentu/commit/e780ab9a))
+
+### 🔧 Chores
+
+- ci: publish GHCR without Docker Hub credentials ([edc6f389](https://github.com/ljquan/opentu/commit/edc6f389))
+- 功能：任务栏历史提示词按需复用 (#213) ([a20ed894](https://github.com/ljquan/opentu/commit/a20ed894))
+- 修复任务栏多图生成覆盖原图 (#210) ([87e9ffb2](https://github.com/ljquan/opentu/commit/87e9ffb2))
+- 功能：刷新默认模型目录并接入 Seedance 2.0 (#211) ([79490ee3](https://github.com/ljquan/opentu/commit/79490ee3))
+- 修复 AI 任务栏跟随尺寸与局域网图片插入 (#209) ([3befb62b](https://github.com/ljquan/opentu/commit/3befb62b))
+- 功能：支持关闭图片任务栏跟随并生成新图片 (#208) ([eedd3d90](https://github.com/ljquan/opentu/commit/eedd3d90))
+
+### ❤️  Thank You
+
+- gongchengtu <1817063960@qq.com>
+- selwen-0102 <2548530499@qq.com>
+
 ## 1.0.11 (2026-08-03)
 
 ### 🩹 Fixes
