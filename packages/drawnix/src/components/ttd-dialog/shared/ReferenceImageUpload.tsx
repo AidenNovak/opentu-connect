@@ -54,6 +54,8 @@ interface ReferenceImageUploadProps {
   slotLabels?: string[];
   /** Error callback */
   onError?: (error: string | null) => void;
+  /** Additional focus scope allowed to paste images into this uploader */
+  pasteScopeRef?: React.RefObject<HTMLElement>;
 }
 
 export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
@@ -66,6 +68,7 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
   label,
   slotLabels,
   onError,
+  pasteScopeRef,
 }) => {
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -496,9 +499,10 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
       const container = containerRef.current;
       if (!container) return;
 
-      // Only handle paste if focus is within the container or on the document body
-      // (to allow paste when no specific element is focused)
-      const isContainerFocused = container.contains(activeElement) ||
+      // Allow callers to include a sibling input without handling unrelated fields.
+      const isContainerFocused =
+        container.contains(activeElement) ||
+        pasteScopeRef?.current?.contains(activeElement) ||
         activeElement === document.body ||
         activeElement?.tagName === 'BODY';
 
@@ -528,7 +532,7 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
     return () => {
       document.removeEventListener('paste', handlePaste);
     };
-  }, [disabled, handleFiles]);
+  }, [disabled, handleFiles, pasteScopeRef]);
 
   // Remove image
   const handleRemove = useCallback((index: number, slot?: number) => {
