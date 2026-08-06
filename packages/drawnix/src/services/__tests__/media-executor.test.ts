@@ -279,6 +279,77 @@ describe('Media Executor Module', () => {
       );
     }, 15000);
 
+    it('passes remote references through Tuzi JSON image requests without browser fetch', async () => {
+      const getImageForAI = vi.fn();
+      vi.doMock('../media-executor/llm-api-logger', () => ({
+        startLLMApiLog: vi.fn(() => 'log-id'),
+        completeLLMApiLog: vi.fn(),
+        failLLMApiLog: vi.fn(),
+      }));
+      vi.doMock('../media-executor/task-storage-writer', () => ({
+        taskStorageWriter: {
+          completeTask: vi.fn(async () => true),
+          failTask: vi.fn(async () => {}),
+        },
+      }));
+      vi.doMock('../unified-cache-service', () => ({
+        unifiedCacheService: {
+          getImageForAI,
+          isCached: vi.fn(async () => false),
+          cacheMediaFromBlob: vi.fn(async () => undefined),
+        },
+      }));
+      vi.doMock('../../utils/api-auth-error-event', () => ({
+        classifyApiCredentialError: vi.fn(() => null),
+        dispatchApiAuthError: vi.fn(),
+      }));
+      vi.doMock('../model-adapters', async (importOriginal) => {
+        const actual = await importOriginal<
+          typeof import('../model-adapters')
+        >();
+        return {
+          ...actual,
+          getAdapterContextFromSettings: vi.fn(() => ({
+            baseUrl: 'https://api.tu-zi.com/v1',
+            apiKey: 'test-key',
+            authType: 'bearer',
+            binding: {
+              requestSchema: 'tuzi.image.gpt-edit-json',
+              submitPath: '/images/generations',
+            },
+          })),
+        };
+      });
+
+      const { executeImageViaAdapter } = await import(
+        '../media-executor/fallback-adapter-routes'
+      );
+      const adapter: ImageModelAdapter = {
+        id: 'tuzi-gpt-image-adapter',
+        label: 'Tuzi GPT Image',
+        kind: 'image',
+        generateImage: vi.fn(async () => ({
+          url: 'data:image/png;base64,cG5n',
+          format: 'png',
+        })),
+      };
+      const remoteReference =
+        'https://apioss28.sydney-ai.com/img/generated-reference.png';
+
+      await executeImageViaAdapter('task-remote-reference', adapter, {
+        prompt: 'Edit this',
+        model: 'gpt-image-2',
+        referenceImages: [remoteReference],
+        generationMode: 'image_edit',
+      });
+
+      expect(adapter.generateImage).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({ referenceImages: [remoteReference] })
+      );
+      expect(getImageForAI).not.toHaveBeenCalled();
+    }, 15000);
+
     it('uses the local task ID for direct image submissions', async () => {
       const send = vi.fn(async () =>
         new Response(

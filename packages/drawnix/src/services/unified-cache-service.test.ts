@@ -130,6 +130,70 @@ describe('UnifiedCacheService insecure LAN fallback', () => {
     expect(await readBlobAsText(restored)).toBe('rejected-cache');
   });
 
+  it('reports an IndexedDB Blob as cached when Cache Storage is unavailable', async () => {
+    vi.stubGlobal('caches', undefined);
+    const assetUrl = '/__aitu_cache__/image/lan-cached.png';
+
+    await unifiedCacheService.cacheMediaFromBlob(
+      assetUrl,
+      new Blob(['lan-cached'], { type: 'image/png' }),
+      'image'
+    );
+
+    await expect(
+      unifiedCacheService.getCacheInfo(assetUrl)
+    ).resolves.toMatchObject({
+      isCached: true,
+      size: 10,
+    });
+  });
+
+  it('does not treat metadata-only remote media as cached on LAN HTTP', async () => {
+    vi.stubGlobal('caches', undefined);
+    const assetUrl = 'https://apioss28.sydney-ai.com/img/metadata-only.png';
+
+    await unifiedCacheService.registerImageMetadata(assetUrl, {
+      taskId: 'metadata-only-task',
+    });
+
+    await expect(
+      unifiedCacheService.getCacheInfo(assetUrl)
+    ).resolves.toMatchObject({
+      isCached: false,
+      cacheWarning: {
+        status: 'failed',
+        reasonCode: 'cache_missing',
+      },
+    });
+  });
+
+  it('checks IndexedDB when Cache Storage is available but misses the media', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.stubGlobal('caches', {
+      open: vi.fn().mockRejectedValue(new Error('SecurityError')),
+    });
+    const assetUrl = '/__aitu_cache__/image/cache-api-miss.png';
+
+    await unifiedCacheService.cacheMediaFromBlob(
+      assetUrl,
+      new Blob(['idb-fallback'], { type: 'image/png' }),
+      'image'
+    );
+
+    vi.stubGlobal('caches', {
+      open: vi.fn().mockResolvedValue({
+        match: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+
+    await expect(
+      unifiedCacheService.getCacheInfo(assetUrl)
+    ).resolves.toMatchObject({
+      isCached: true,
+      size: 12,
+    });
+  });
+
   it('repairs legacy metadata when the persisted Blob is missing', async () => {
     vi.stubGlobal('caches', undefined);
     const blob = new Blob(['repair-local-image'], { type: 'image/png' });
