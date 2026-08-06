@@ -55,6 +55,37 @@ The system SHALL reuse the existing AI input bar near a selected generated image
 - **WHEN** its URL, prompt, task ID or anchor ID changes in place
 - **THEN** the AI input bar SHALL refresh the target context without requiring reselection
 
+#### Scenario: Disable persistent taskbar positioning
+
+- **GIVEN** the AI input bar is bound to a single image on a desktop viewport
+- **WHEN** the user turns off the taskbar follow switch at the top-right edge
+- **THEN** the input bar SHALL return to its default bottom position
+- **AND** the target thumbnail, per-image draft, prompt suggestion, model parameters, knowledge context and in-place replacement binding SHALL remain unchanged
+- **AND** the existing close guidance and close button SHALL be hidden so that only the taskbar follow switch remains at the top-right edge
+- **AND** the disabled preference SHALL persist across page and board reloads for the same browser origin
+
+#### Scenario: Re-enable persistent taskbar positioning
+
+- **GIVEN** the AI input bar remains bound to an image on a desktop viewport while taskbar follow is disabled
+- **WHEN** the user turns on the taskbar follow switch
+- **THEN** the input bar SHALL immediately move near the current image
+- **AND** the existing close guidance and close button SHALL become available again
+- **AND** the enabled preference SHALL persist across page and board reloads for the same browser origin
+
+#### Scenario: Follow preference storage is unavailable or invalid
+
+- **GIVEN** the stored follow preference is missing, invalid or unavailable
+- **WHEN** the AI input bar initializes
+- **THEN** taskbar follow SHALL default to enabled
+- **AND** a storage failure while toggling SHALL NOT interrupt target binding or generation
+
+#### Scenario: Toggle follow on a compact viewport
+
+- **GIVEN** the responsive layout keeps the AI input bar fixed at the bottom
+- **WHEN** the user changes the taskbar follow switch
+- **THEN** the preference SHALL be persisted for supported desktop viewports
+- **AND** the compact taskbar controls SHALL remain visible and functional
+
 ### Requirement: AI Input Bar SHALL Allow Detaching The Current Image Target
 
 The system SHALL let the user stop following and replacing the current image while keeping the selected image as a reference.

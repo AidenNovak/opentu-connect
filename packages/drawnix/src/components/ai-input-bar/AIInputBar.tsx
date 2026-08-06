@@ -33,7 +33,12 @@ import {
   Unlink,
   X,
 } from 'lucide-react';
-import { Dropdown, MessagePlugin, type DropdownOption } from 'tdesign-react';
+import {
+  Dropdown,
+  MessagePlugin,
+  Switch,
+  type DropdownOption,
+} from 'tdesign-react';
 import { useConfirmDialog } from '../dialog/ConfirmDialog';
 import { ImageUploadIcon, MediaLibraryIcon } from '../icons';
 import { useBoard } from '@plait-board/react-board';
@@ -204,7 +209,10 @@ import {
   pinBoundTargetReferenceContent,
   pruneStaleBoundTargetTaskbarDrafts,
   readBoundTargetDismissHintCount,
+  readBoundTargetFollowEnabled,
   recordBoundTargetDismiss,
+  persistBoundTargetFollowEnabled,
+  resolveBoundTargetForPosition,
   resolveBoundTargetTaskbarDraft,
   resolveBoundTargetSuppression,
   resolveTaskbarDraftAfterSubmission,
@@ -1426,6 +1434,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(
     const boundImageTargetRef = useRef<BoundImageTarget | null>(null);
     const [boundTargetDismissHintCount, setBoundTargetDismissHintCount] =
       useState(() => readBoundTargetDismissHintCount());
+    const [boundTargetFollowEnabled, setBoundTargetFollowEnabled] = useState(
+      () => readBoundTargetFollowEnabled()
+    );
     const [boundTargetError, setBoundTargetError] = useState<string | null>(
       null
     );
@@ -3338,6 +3349,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(
         language,
       ]
     );
+
+    const handleBoundTargetFollowChange = useCallback((enabled: boolean) => {
+      setBoundTargetFollowEnabled(persistBoundTargetFollowEnabled(enabled));
+      setBoundInputLayoutTick((tick) => tick + 1);
+    }, []);
 
     const handleBoundInputViewportChange = useCallback(() => {
       setBoundInputLayoutTick((tick) => tick + 1);
@@ -5645,8 +5661,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(
       resizeAIInputTextarea(textarea, inputResizeMode);
     }, [inputResizeMode, isPromptManuallyExpanded, prompt, shouldKeepExpanded]);
 
+    const positionedBoundImageTarget = resolveBoundTargetForPosition(
+      followedBoundImageTarget,
+      boundTargetFollowEnabled
+    );
     const boundInputPosition = useMemo(() => {
-      if (!followedBoundImageTarget) return null;
+      if (!positionedBoundImageTarget) return null;
 
       const board = SelectionWatcherBoardRef.current;
       const boardContainer = board
@@ -5661,18 +5681,18 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(
       const originY = origination?.[1] || 0;
       const targetCenterX =
         boardRect.left +
-        (followedBoundImageTarget.rect.x +
-          followedBoundImageTarget.rect.width / 2 -
+        (positionedBoundImageTarget.rect.x +
+          positionedBoundImageTarget.rect.width / 2 -
           originX) *
           zoom;
       const targetBottom =
         boardRect.top +
-        (followedBoundImageTarget.rect.y +
-          followedBoundImageTarget.rect.height -
+        (positionedBoundImageTarget.rect.y +
+          positionedBoundImageTarget.rect.height -
           originY) *
           zoom;
       const targetTop =
-        boardRect.top + (followedBoundImageTarget.rect.y - originY) * zoom;
+        boardRect.top + (positionedBoundImageTarget.rect.y - originY) * zoom;
       const viewportMargin = 12;
       const barWidth = getBoundTaskbarWidth(
         containerRef.current?.getBoundingClientRect().width,
@@ -5690,7 +5710,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(
           : Math.max(viewportMargin, targetTop - estimatedHeight - 8);
 
       return { left, top };
-    }, [boundInputLayoutTick, followedBoundImageTarget, shouldKeepExpanded]);
+    }, [boundInputLayoutTick, positionedBoundImageTarget, shouldKeepExpanded]);
 
     const boundTargetDismissOptions = useMemo<DropdownOption[]>(
       () => [
@@ -5778,7 +5798,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(
 
           {followedBoundImageTarget ? (
             <div className="ai-input-bar__bound-dismiss">
-              {boundTargetDismissHintCount < BOUND_TARGET_DISMISS_HINT_LIMIT ? (
+              {boundTargetFollowEnabled &&
+              boundTargetDismissHintCount < BOUND_TARGET_DISMISS_HINT_LIMIT ? (
                 <div className="ai-input-bar__bound-dismiss-hint" role="status">
                   {language === 'zh'
                     ? '关闭跟随，当前图仍作参考图'
@@ -5788,58 +5809,95 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(
               <div className="ai-input-bar__bound-dismiss-actions">
                 <HoverTip
                   content={
-                    language === 'zh'
-                      ? '本次只作参考图'
-                      : 'Use as reference this time'
+                    boundTargetFollowEnabled
+                      ? language === 'zh'
+                        ? '任务栏跟随已开启'
+                        : 'Taskbar follow is on'
+                      : language === 'zh'
+                      ? '任务栏跟随已关闭'
+                      : 'Taskbar follow is off'
                   }
                   showArrow={false}
                 >
-                  <button
-                    type="button"
-                    className="ai-input-bar__bound-dismiss-btn"
-                    aria-label={
-                      language === 'zh'
-                        ? '本次只作参考图'
-                        : 'Use as reference this time'
-                    }
+                  <span
+                    className="ai-input-bar__bound-follow-toggle"
                     onMouseDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
                     }}
-                    onClick={() => handleDismissBoundImageTarget('once')}
-                    disabled={isSubmitting}
                   >
-                    <X size={16} aria-hidden="true" />
-                  </button>
+                    <Switch
+                      size="small"
+                      value={boundTargetFollowEnabled}
+                      label={
+                        <span className="ai-input-bar__bound-follow-label">
+                          {language === 'zh' ? '任务栏跟随' : 'Taskbar follow'}
+                        </span>
+                      }
+                      onChange={(checked) =>
+                        handleBoundTargetFollowChange(checked as boolean)
+                      }
+                    />
+                  </span>
                 </HoverTip>
-                <Dropdown
-                  options={boundTargetDismissOptions}
-                  trigger="click"
-                  placement="top-right"
-                  minColumnWidth={190}
-                  onClick={(data) =>
-                    handleDismissBoundImageTarget(
-                      data.value as BoundImageTargetDismissMode
-                    )
-                  }
-                >
-                  <button
-                    type="button"
-                    className="ai-input-bar__bound-dismiss-menu-btn"
-                    aria-label={
-                      language === 'zh'
-                        ? '选择跟随方式'
-                        : 'Choose follow behavior'
-                    }
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    disabled={isSubmitting}
-                  >
-                    <ChevronDown size={14} aria-hidden="true" />
-                  </button>
-                </Dropdown>
+                {boundTargetFollowEnabled ? (
+                  <>
+                    <HoverTip
+                      content={
+                        language === 'zh'
+                          ? '关闭任务栏跟随'
+                          : 'Stop following this image'
+                      }
+                      showArrow={false}
+                    >
+                      <button
+                        type="button"
+                        className="ai-input-bar__bound-dismiss-btn"
+                        aria-label={
+                          language === 'zh'
+                            ? '本次只作参考图'
+                            : 'Use as reference this time'
+                        }
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                        onClick={() => handleDismissBoundImageTarget('once')}
+                        disabled={isSubmitting}
+                      >
+                        <X size={16} aria-hidden="true" />
+                      </button>
+                    </HoverTip>
+                    <Dropdown
+                      options={boundTargetDismissOptions}
+                      trigger="click"
+                      placement="top-right"
+                      minColumnWidth={190}
+                      onClick={(data) =>
+                        handleDismissBoundImageTarget(
+                          data.value as BoundImageTargetDismissMode
+                        )
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="ai-input-bar__bound-dismiss-menu-btn"
+                        aria-label={
+                          language === 'zh'
+                            ? '选择跟随方式'
+                            : 'Choose follow behavior'
+                        }
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                        disabled={isSubmitting}
+                      >
+                        <ChevronDown size={14} aria-hidden="true" />
+                      </button>
+                    </Dropdown>
+                  </>
+                ) : null}
               </div>
             </div>
           ) : null}

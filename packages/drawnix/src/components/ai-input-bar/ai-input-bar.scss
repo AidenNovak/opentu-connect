@@ -214,6 +214,32 @@ $ai-input-small-expanded-max-height: $ai-input-small-line-height * 6 +
     }
   }
 
+  &__bound-follow-toggle {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 5px;
+    border: 1px solid rgba(234, 88, 12, 0.2);
+    border-radius: 12px;
+    background: var(--island-bg-color, #fff);
+    box-shadow: 0 2px 8px rgba(124, 45, 18, 0.16);
+
+    .t-switch.t-size-s {
+      min-width: 28px;
+    }
+  }
+
+  &__bound-follow-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   &__processing {
     display: flex;
     align-items: center;

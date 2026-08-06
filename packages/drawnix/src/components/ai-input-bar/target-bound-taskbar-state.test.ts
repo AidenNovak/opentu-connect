@@ -11,7 +11,10 @@ import {
   pinBoundTargetReferenceContent,
   pruneStaleBoundTargetTaskbarDrafts,
   readBoundTargetDismissHintCount,
+  readBoundTargetFollowEnabled,
   recordBoundTargetDismiss,
+  persistBoundTargetFollowEnabled,
+  resolveBoundTargetForPosition,
   resolveBoundTargetTaskbarDraft,
   resolveBoundTargetSuppression,
   resolveTaskbarDraftAfterSubmission,
@@ -23,6 +26,17 @@ function createStorage(initialValue?: string) {
   const values = new Map<string, string>();
   if (initialValue !== undefined) {
     values.set(LS_KEYS.AI_BOUND_TARGET_DISMISS_HINT_COUNT, initialValue);
+  }
+  return {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+  };
+}
+
+function createFollowStorage(initialValue?: string) {
+  const values = new Map<string, string>();
+  if (initialValue !== undefined) {
+    values.set(LS_KEYS.AI_BOUND_TARGET_FOLLOW_ENABLED, initialValue);
   }
   return {
     getItem: (key: string) => values.get(key) ?? null,
@@ -75,6 +89,55 @@ describe('target-bound-taskbar-state', () => {
   it('忽略损坏计数且在存储不可用时不中断关闭操作', () => {
     expect(readBoundTargetDismissHintCount(createStorage('invalid'))).toBe(0);
     expect(recordBoundTargetDismiss(3, null)).toBe(4);
+  });
+
+  it('任务栏跟随默认开启，并只把显式 false 视为关闭', () => {
+    expect(readBoundTargetFollowEnabled(createFollowStorage())).toBe(true);
+    expect(readBoundTargetFollowEnabled(createFollowStorage('true'))).toBe(
+      true
+    );
+    expect(readBoundTargetFollowEnabled(createFollowStorage('invalid'))).toBe(
+      true
+    );
+    expect(readBoundTargetFollowEnabled(createFollowStorage('false'))).toBe(
+      false
+    );
+  });
+
+  it('持久化最后一次跟随选择，存储不可用时仍返回页面内状态', () => {
+    const storage = createFollowStorage();
+    const blockedStorage = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+    };
+
+    expect(persistBoundTargetFollowEnabled(false, storage)).toBe(false);
+    expect(readBoundTargetFollowEnabled(storage)).toBe(false);
+    expect(persistBoundTargetFollowEnabled(true, storage)).toBe(true);
+    expect(readBoundTargetFollowEnabled(storage)).toBe(true);
+    expect(persistBoundTargetFollowEnabled(false, null)).toBe(false);
+    expect(readBoundTargetFollowEnabled(blockedStorage)).toBe(true);
+    expect(persistBoundTargetFollowEnabled(false, blockedStorage)).toBe(false);
+  });
+
+  it('关闭跟随只移除定位目标，不移除生成绑定目标', () => {
+    const target = {
+      elementId: 'image-a',
+      prompt: '保留目标功能',
+      generationAnchorId: 'anchor-a',
+      generationTaskId: 'task-a',
+    };
+
+    expect(resolveBoundTargetForPosition(target, false)).toBeNull();
+    expect(resolveBoundTargetForPosition(target, true)).toBe(target);
+    expect(buildBoundTargetGenerationParams(target)).toMatchObject({
+      replaceElementId: 'image-a',
+      targetElementId: 'image-a',
+    });
   });
 
   it('仅在同一目标仍选中时抑制重绑', () => {

@@ -117,6 +117,36 @@ export function recordBoundTargetDismiss(
   return nextCount;
 }
 
+export function readBoundTargetFollowEnabled(
+  storage: ReadableStorage | null = getBrowserStorage()
+): boolean {
+  if (!storage) return true;
+  try {
+    return storage.getItem(LS_KEYS.AI_BOUND_TARGET_FOLLOW_ENABLED) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+export function persistBoundTargetFollowEnabled(
+  enabled: boolean,
+  storage: WritableStorage | null = getBrowserStorage()
+): boolean {
+  try {
+    storage?.setItem(LS_KEYS.AI_BOUND_TARGET_FOLLOW_ENABLED, String(enabled));
+  } catch {
+    // localStorage 被禁用时，调用方仍保留当前页面内的偏好。
+  }
+  return enabled;
+}
+
+export function resolveBoundTargetForPosition<T>(
+  target: T | null,
+  followEnabled: boolean
+): T | null {
+  return followEnabled ? target : null;
+}
+
 export function resolveBoundTargetSuppression(
   targetElementId: string | null,
   suppressedElementId: string | null
