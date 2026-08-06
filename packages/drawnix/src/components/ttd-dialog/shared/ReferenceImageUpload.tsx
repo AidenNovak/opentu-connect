@@ -21,6 +21,7 @@ import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
 import type { Asset } from '../../../types/asset.types';
 import { SelectionMode, AssetType, AssetSource } from '../../../types/asset.types';
 import { useAssets } from '../../../contexts/AssetContext';
+import { unifiedCacheService } from '../../../services/unified-cache-service';
 import './ReferenceImageUpload.scss';
 
 const MAX_IMAGE_SIZE_BYTES = 25 * 1024 * 1024;
@@ -124,12 +125,45 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
     : [];
 
   const assetToReferenceImage = useCallback(async (asset: Asset): Promise<ReferenceImage> => {
+    if (asset.type !== AssetType.IMAGE) {
+      throw new Error(`Asset is not an image: ${asset.name}`);
+    }
+
     if (asset.size && asset.size > MAX_IMAGE_SIZE_BYTES) {
       throw new Error(`Asset exceeds 25MB limit: ${asset.name}`);
     }
 
-    const response = await fetch(asset.url);
-    let blob = await response.blob();
+    let blob = await unifiedCacheService.getCachedBlob(asset.url);
+
+    if (!blob || blob.size === 0) {
+      const canUseRemoteUrl =
+        /^https?:\/\//i.test(asset.url) &&
+        asset.source === AssetSource.AI_GENERATED &&
+        asset.type === AssetType.IMAGE &&
+        (!asset.mimeType || asset.mimeType.startsWith('image/'));
+
+      if (canUseRemoteUrl) {
+        return {
+          url: asset.url,
+          name: asset.name,
+        };
+      }
+
+      throw new Error(`Asset content is unavailable: ${asset.name}`);
+    }
+
+    const blobMimeType = blob.type.toLowerCase();
+    const assetMimeType = asset.mimeType?.toLowerCase();
+    const mimeType =
+      !blobMimeType || blobMimeType === 'application/octet-stream'
+        ? assetMimeType || blobMimeType
+        : blobMimeType;
+    if (mimeType && !mimeType.startsWith('image/')) {
+      throw new Error(`Asset is not an image: ${asset.name}`);
+    }
+    if (mimeType && blob.type !== mimeType) {
+      blob = blob.slice(0, blob.size, mimeType);
+    }
 
     if (blob.size > MAX_IMAGE_SIZE_BYTES) {
       throw new Error(`Asset exceeds 25MB limit: ${asset.name}`);
@@ -397,7 +431,9 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
       }
 
       setShowMediaLibrary(false);
-      onError?.(null);
+      onError?.(
+        newImages.length === selectedAssets.length ? null : t.loadFailed
+      );
     } catch (error) {
       console.error('[ReferenceImageUpload] Batch selection failed:', error);
       onError?.(t.loadFailed);

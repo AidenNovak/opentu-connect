@@ -38,6 +38,10 @@ type ImageInputFidelity = 'high' | 'low';
 type ImageBackground = 'transparent' | 'opaque' | 'auto';
 type ImageOutputFormat = 'png' | 'jpeg' | 'webp';
 
+const supportsRemoteImageReferences = (requestSchema?: string): boolean =>
+  requestSchema === 'tuzi.image.gpt-generation-json' ||
+  requestSchema === 'tuzi.image.gpt-edit-json';
+
 function assertCurrentExecutionAttempt(options?: ExecutionOptions): void {
   if (options?.isCurrentAttempt?.() === false) {
     const error = new Error('图片提交已被取消或替代');
@@ -145,6 +149,14 @@ export async function executeImageViaAdapter(
     if (params.referenceImages && params.referenceImages.length > 0) {
       processedImages = await Promise.all(
         params.referenceImages.map(async (imgUrl) => {
+          if (
+            supportsRemoteImageReferences(
+              adapterContext.binding?.requestSchema
+            ) &&
+            /^https?:\/\//i.test(imgUrl)
+          ) {
+            return imgUrl;
+          }
           const imageData = await unifiedCacheService.getImageForAI(imgUrl);
           return ensureBase64ForAI(imageData, options?.signal);
         })

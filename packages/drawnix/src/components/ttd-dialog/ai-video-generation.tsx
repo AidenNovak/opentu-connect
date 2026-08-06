@@ -1405,6 +1405,7 @@ const AIVideoGeneration = ({
                 disabled={isGenerating}
                 multiple={imageUploadConfig.maxCount > 1}
                 maxCount={imageUploadConfig.maxCount}
+                onError={setError}
                 slotLabels={
                   imageUploadConfig.mode === 'frames'
                     ? imageUploadConfig.labels

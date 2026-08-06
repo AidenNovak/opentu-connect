@@ -926,7 +926,8 @@ class UnifiedCacheService {
         return { isCached: false };
       }
 
-      // 2. 检查 Cache API 中是否有实际图片文件
+      // 2. 检查 Cache API 或 IndexedDB Blob 中是否有实际媒体内容。
+      // LAN HTTP 页面通常没有 Cache API，不能把元数据当成缓存成功。
       let isInCacheAPI = false;
       if (typeof caches !== 'undefined') {
         try {
@@ -952,7 +953,12 @@ class UnifiedCacheService {
             response = await cache.match(normalizedUrl, { ignoreSearch: true });
           }
 
-          isInCacheAPI = !!response;
+          if (!response) {
+            const blob = await this.getBlobItem(normalizedUrl);
+            isInCacheAPI = Boolean(blob && blob.size > 0);
+          } else {
+            isInCacheAPI = true;
+          }
 
           // console.log('[UnifiedCache] Cache API check:', {
           //   url: url.substring(0, 80) + '...',
@@ -961,12 +967,12 @@ class UnifiedCacheService {
           // });
         } catch (error) {
           console.warn('[UnifiedCache] Failed to check Cache API:', error);
-          // Cache API 检查失败，降级为只检查 IndexedDB
-          isInCacheAPI = true;
+          const blob = await this.getBlobItem(normalizedUrl);
+          isInCacheAPI = Boolean(blob && blob.size > 0);
         }
       } else {
-        // 浏览器不支持 Cache API（不太可能，但兼容处理）
-        isInCacheAPI = true;
+        const blob = await this.getBlobItem(normalizedUrl);
+        isInCacheAPI = Boolean(blob && blob.size > 0);
       }
 
       // 3. 只有在 IndexedDB 和 Cache API 都有时，才返回 isCached: true
