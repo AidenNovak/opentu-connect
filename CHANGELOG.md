@@ -1,3 +1,18 @@
+## 1.0.16 (2026-08-10)
+
+### 🚀 Features
+
+- 图片预览显示实际尺寸 (#225) ([3116e324](https://github.com/ljquan/opentu/commit/3116e324))
+
+### 🩹 Fixes
+
+- 修复 Gemini 3.1 图片渲染失败 (#224) ([0b448b32](https://github.com/ljquan/opentu/commit/0b448b32))
+
+### ❤️  Thank You
+
+- selwen-0102 <2548530499@qq.com>
+- 李泓震 <3029956183@qq.com>
+
 ## 1.0.13 (2026-08-10)
 
 ### 🚀 Features
