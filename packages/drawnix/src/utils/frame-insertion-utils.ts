@@ -38,6 +38,18 @@ export type FrameMediaInsertionResult =
     }
   | undefined;
 
+export interface FrameMediaInsertionOptions {
+  fit?: 'contain' | 'stretch';
+  boardGuard?: () => boolean;
+  metadata?: Record<string, unknown>;
+}
+
+function assertFrameInsertionBoardCurrent(boardGuard?: () => boolean): void {
+  if (boardGuard && !boardGuard()) {
+    throw new Error('画板已切换，取消本次插入');
+  }
+}
+
 export interface PPTSlideImageInfo {
   element?: any;
   index: number;
@@ -306,6 +318,23 @@ function loadFrameImageElement(imageUrl: string): Promise<HTMLImageElement> {
     image.onerror = reject;
     image.src = imageUrl;
   });
+}
+
+function insertFrameMediaElement(
+  board: PlaitBoard,
+  imageItem: {
+    url: string;
+    width: number;
+    height: number;
+    isVideo?: boolean;
+    videoType?: 'video';
+  },
+  point: Point
+): PlaitElement | undefined {
+  // insertImage 同步追加节点；在同一调用边界内取回元素，避免异步加载使旧下标失效。
+  const insertionIndex = board.children.length;
+  DrawTransforms.insertImage(board, imageItem, point);
+  return board.children[insertionIndex];
 }
 
 function fitMediaIntoRegion(
@@ -665,8 +694,9 @@ export async function insertMediaIntoSelectedFrame(
   mediaUrl: string,
   mediaType: 'image' | 'video',
   mediaDimensions?: { width: number; height: number },
-  options?: { fit?: 'contain' | 'stretch'; metadata?: Record<string, unknown> }
+  options?: FrameMediaInsertionOptions
 ): Promise<FrameMediaInsertionResult> {
+  assertFrameInsertionBoardCurrent(options?.boardGuard);
   const frame = getSelectedInsertionFrame(board);
   if (!frame) return undefined;
 
@@ -708,10 +738,9 @@ export async function insertMediaIntoFrame(
   frameDimensions: { width: number; height: number },
   mediaDimensions?: { width: number; height: number },
   targetRegion?: { x: number; y: number; width: number; height: number },
-  options?: { fit?: 'contain' | 'stretch'; metadata?: Record<string, unknown> }
+  options?: FrameMediaInsertionOptions
 ): Promise<FrameMediaInsertionResult> {
-  const resolvedMediaUrl = mediaUrl;
-
+  assertFrameInsertionBoardCurrent(options?.boardGuard);
   // 查找目标 Frame
   const frameElement = board.children.find(
     (el) => el.id === frameId && isFrameElement(el)
@@ -778,26 +807,14 @@ export async function insertMediaIntoFrame(
   const insertY = region.y + (region.height - mediaHeight) / 2;
   const insertionPoint: Point = [insertX, insertY];
 
-  if (mediaType === 'image' && shouldLoadImageForContain) {
-    try {
-      const image = await loadFrameImageElement(resolvedMediaUrl);
-      const fitted = fitMediaIntoRegion(
-        { width: image.width, height: image.height },
-        regionDimensions
-      );
-      mediaWidth = fitted.width;
-      mediaHeight = fitted.height;
-    } catch {
-      // 图片尺寸不可读时沿用目标区域尺寸，保持插入不中断。
-    }
-  }
+  let insertedElement: PlaitElement | undefined;
 
-  const existingElementIds = new Set(board.children.map((child) => child.id));
   if (mediaType === 'video') {
-    const videoWithFragment = resolvedMediaUrl.includes('#')
-      ? resolvedMediaUrl
-      : `${resolvedMediaUrl}#video`;
-    DrawTransforms.insertImage(
+    assertFrameInsertionBoardCurrent(options?.boardGuard);
+    const videoWithFragment = mediaUrl.includes('#')
+      ? mediaUrl
+      : `${mediaUrl}#video`;
+    insertedElement = insertFrameMediaElement(
       board,
       {
         url: videoWithFragment,
@@ -805,42 +822,54 @@ export async function insertMediaIntoFrame(
         height: mediaHeight,
         isVideo: true,
         videoType: 'video',
-      } as any,
+      },
       insertionPoint
     );
   } else {
-    DrawTransforms.insertImage(
+    if (shouldLoadImageForContain) {
+      try {
+        const image = await loadFrameImageElement(mediaUrl);
+        const fitted = fitMediaIntoRegion(
+          { width: image.width, height: image.height },
+          regionDimensions
+        );
+        mediaWidth = fitted.width;
+        mediaHeight = fitted.height;
+      } catch {
+        // 图片尺寸不可读时沿用目标区域尺寸，保持插入不中断。
+      }
+    }
+
+    assertFrameInsertionBoardCurrent(options?.boardGuard);
+    insertedElement = insertFrameMediaElement(
       board,
       {
-        url: resolvedMediaUrl,
+        url: mediaUrl,
         width: mediaWidth,
         height: mediaHeight,
       },
       insertionPoint
     );
   }
-  const newElement = board.children.find(
-    (child) => !existingElementIds.has(child.id)
-  );
-  const newElementIndex = newElement
-    ? board.children.findIndex((child) => child.id === newElement.id)
-    : -1;
-
   let finalPoint = insertionPoint;
   let finalSize = {
     width: mediaWidth,
     height: mediaHeight,
   };
 
-  // 按稳定 ID 查找新插入的元素并绑定到 Frame。
-  if (newElement && newElementIndex >= 0) {
+  // 查找新插入的元素并绑定到 Frame
+  if (insertedElement) {
+    const insertedElementIndex = board.children.findIndex(
+      (element) => element.id === insertedElement?.id
+    );
     if (
       mediaType === 'image' &&
       shouldLoadImageForContain &&
-      (newElement as any).points?.length >= 2
+      (insertedElement as any).points?.length >= 2 &&
+      insertedElementIndex !== -1
     ) {
       const insertedRect = RectangleClient.getRectangleByPoints(
-        (newElement as any).points
+        (insertedElement as any).points
       );
       const centeredRect = {
         x: region.x + (region.width - insertedRect.width) / 2,
@@ -864,19 +893,19 @@ export async function insertMediaIntoFrame(
             ],
           ],
         } as any,
-        [newElementIndex]
+        [insertedElementIndex]
       );
     }
     const generationPatch = buildGenerationMetadataPatch(options?.metadata);
-    if (Object.keys(generationPatch).length > 0) {
-      Transforms.setNode(board, generationPatch as any, [newElementIndex]);
+    if (Object.keys(generationPatch).length > 0 && insertedElementIndex >= 0) {
+      Transforms.setNode(board, generationPatch as any, [insertedElementIndex]);
     }
-    FrameTransforms.bindToFrame(board, newElement, frameElement);
+    FrameTransforms.bindToFrame(board, insertedElement, frameElement);
   }
 
   return {
     point: finalPoint,
-    elementId: newElement?.id,
+    elementId: insertedElement?.id,
     size: finalSize,
   };
 }
