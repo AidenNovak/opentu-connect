@@ -14,8 +14,8 @@ import {
 import { Island } from '../../island';
 import { Popover, PopoverContent, PopoverTrigger } from '../../popover/popover';
 import { useState } from 'react';
-import { CleanBoard, OpenFile, SaveAsImage, SaveToFile, Settings, BackupRestore, CloudSync, DebugPanel, QuickCommands, UserManual, VersionInfo, CleanInvalidLinks } from './app-menu-items';
-import { GithubIcon } from '../../icons';
+import { CleanBoard, OpenFile, SaveAsImage, SaveToFile, Settings, BackupRestore, CloudSync, DebugPanel, QuickCommands, UserManual, VersionInfo, CleanInvalidLinks, MeimaobingAccount } from './app-menu-items';
+import { GithubIcon, MeimaobingAccountIcon } from '../../icons';
 import { LanguageSwitcherMenu } from './language-switcher-menu';
 import Menu from '../../menu/menu';
 import MenuSeparator from '../../menu/menu-separator';
@@ -24,6 +24,8 @@ import { Z_INDEX } from '../../../constants/z-index';
 import { ToolbarSectionProps } from '../toolbar.types';
 import { useToolbarConfig } from '../../../hooks/use-toolbar-config';
 import { ToolbarContextMenu } from '../toolbar-context-menu';
+import { openMeimaobingAccountSettings } from '../../../utils/provider-settings-navigation';
+import { useDrawnix } from '../../../hooks/use-drawnix';
 
 export interface AppToolbarProps extends ToolbarSectionProps {
   onOpenBackupRestore?: () => void;
@@ -38,6 +40,7 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
 }) => {
   const board = useBoard();
   const { t } = useI18n();
+  const { setAppState } = useDrawnix();
   const { isButtonVisible, visibleButtons } = useToolbarConfig();
   const container = PlaitBoard.getBoardContainer(board);
   const [appMenuOpen, setAppMenuOpen] = useState(false);
@@ -103,6 +106,7 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
                 setAppMenuOpen(false);
                 onOpenCloudSync?.();
               }} />
+              <MeimaobingAccount />
               <Settings />
               <MenuSeparator />
               <QuickCommands />
@@ -174,6 +178,18 @@ export const AppToolbar: React.FC<AppToolbarProps> = ({
           data-track="toolbar_click_github"
           onPointerUp={() => {
             window.open('https://github.com/ljquan/aitu', '_blank');
+          }}
+        />
+        <ToolButton
+          type="icon"
+          icon={<MeimaobingAccountIcon />}
+          visible={true}
+          tooltip={t('menu.meimaobing')}
+          tooltipPlacement="right"
+          aria-label={t('menu.meimaobing')}
+          data-track="toolbar_click_meimaobing_account"
+          onPointerUp={() => {
+            openMeimaobingAccountSettings(setAppState);
           }}
         />
       </div>
