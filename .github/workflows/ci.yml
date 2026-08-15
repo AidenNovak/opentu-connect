@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  # PR 时运行：lint、test、build 和冒烟测试
   main:
+    if: github.repository == 'ljquan/opentu'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -100,7 +100,7 @@ jobs:
   release-e2e:
     runs-on: ubuntu-latest
     # 仅在 main 分支 push 或手动触发时运行
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.repository == 'ljquan/opentu' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v6
         with:
