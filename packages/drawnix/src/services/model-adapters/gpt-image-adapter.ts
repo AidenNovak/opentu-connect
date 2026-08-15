@@ -12,10 +12,16 @@ import { sendAdapterRequest } from './context';
 import { readProviderResponseJson } from '../provider-routing';
 import { registerModelAdapter } from './registry';
 import type {
+  AdapterContext,
   ImageGenerationRequest,
   ImageGenerationResult,
   ImageModelAdapter,
 } from './types';
+import { isMeimaobingAccountProfileId } from '../../utils/managed-image-provider-profiles';
+import {
+  getMeimaobingImageGatewayError,
+  MeimaobingImageGatewayError,
+} from '../../utils/meimaobing-account';
 
 const GPT_IMAGE_OUTPUT_FORMATS = new Set(['png', 'jpeg', 'webp']);
 const GPT_IMAGE_BACKGROUND_VALUES = new Set(['transparent', 'opaque', 'auto']);
@@ -206,6 +212,21 @@ function getBlobExtension(blob: Blob, source: string): string {
   return mimeExtension === 'bin' ? 'png' : mimeExtension;
 }
 
+function isPageBlob(value: Blob): boolean {
+  return value instanceof Blob;
+}
+
+async function toPageBlob(blob: Blob): Promise<Blob> {
+  if (isPageBlob(blob)) {
+    return blob;
+  }
+
+  const buffer = await blob.arrayBuffer();
+  return new Blob([buffer], {
+    type: blob.type || 'application/octet-stream',
+  });
+}
+
 async function imageInputToBlob(
   value: string,
   filenamePrefix: string,
@@ -228,7 +249,7 @@ async function imageInputToBlob(
     );
   }
 
-  const blob = await response.blob();
+  const blob = await toPageBlob(await response.blob());
   return {
     blob,
     filename: `${filenamePrefix}.${getBlobExtension(blob, normalized)}`,
@@ -493,20 +514,51 @@ export async function resolveGeneratedImageDimensions(
   return dimensions ? { ...result, ...dimensions } : result;
 }
 
-async function readErrorMessage(response: Response): Promise<string> {
+function isMeimaobingAccountRequest(context: AdapterContext): boolean {
+  return isMeimaobingAccountProfileId(
+    context.provider?.profileId || context.binding?.profileId
+  );
+}
+
+function getUnstructuredMeimaobingGatewayError(
+  response: Response
+): MeimaobingImageGatewayError {
+  if (response.status === 401) {
+    return new MeimaobingImageGatewayError('SIGN_IN_REQUIRED');
+  }
+  if (response.status === 402) {
+    return new MeimaobingImageGatewayError('INSUFFICIENT_BALANCE');
+  }
+  if (response.status === 409) {
+    return new MeimaobingImageGatewayError('REQUEST_PENDING');
+  }
+  return new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE');
+}
+
+async function readRequestError(
+  response: Response,
+  context: AdapterContext
+): Promise<Error> {
   const data = await readProviderResponseJson<Record<string, any>>(
     response
   ).catch(() => null);
+  const meimaobingError = getMeimaobingImageGatewayError(data);
+  if (meimaobingError) {
+    return meimaobingError;
+  }
+  if (isMeimaobingAccountRequest(context)) {
+    return getUnstructuredMeimaobingGatewayError(response);
+  }
   if (typeof data?.error === 'string') {
-    return data.error;
+    return new Error(data.error);
   }
   if (typeof data?.error?.message === 'string') {
-    return data.error.message;
+    return new Error(data.error.message);
   }
   if (typeof data?.message === 'string') {
-    return data.message;
+    return new Error(data.message);
   }
-  return `GPT Image request failed: ${response.status}`;
+  return new Error(`GPT Image request failed: ${response.status}`);
 }
 
 export const gptImageAdapter: ImageModelAdapter = {
@@ -557,7 +609,7 @@ export const gptImageAdapter: ImageModelAdapter = {
     });
 
     if (!response.ok) {
-      throw new Error(await readErrorMessage(response));
+      throw await readRequestError(response, context);
     }
 
     const result = await readProviderResponseJson(response);

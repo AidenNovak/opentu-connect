@@ -1004,6 +1004,21 @@ const isWatchMode = process.argv.includes('--watch');
 const isServeMode = process.argv.includes('serve');
 const reactNodeEnv = isWatchMode || isServeMode ? 'development' : 'production';
 
+// Local Image Gateway only. Do not point this at a public hostname; the
+// browser talks to same-origin `/meimaobing` and `/auth/meimaobing`.
+const MEIMAOBING_IMAGE_GATEWAY_DEV_TARGET =
+  process.env.MEIMAOBING_IMAGE_GATEWAY_DEV_TARGET || 'http://127.0.0.1:8787';
+const meimaobingImageGatewayDevProxy = {
+  '/meimaobing': {
+    target: MEIMAOBING_IMAGE_GATEWAY_DEV_TARGET,
+    changeOrigin: true,
+  },
+  '/auth/meimaobing': {
+    target: MEIMAOBING_IMAGE_GATEWAY_DEV_TARGET,
+    changeOrigin: true,
+  },
+};
+
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../node_modules/.vite/apps/web',
@@ -1035,6 +1050,7 @@ export default defineConfig({
     // dev 代理：让图片提交请求在本地开发环境按同源方式携带 X-Request-Id
     // 只允许固定 Tuzi 节点，保留原 Token、计费和权限域。
     proxy: {
+      ...meimaobingImageGatewayDevProxy,
       '/__opentu_tuzi_proxy__/api/': {
         target: 'https://api.tu-zi.com',
         changeOrigin: true,
@@ -1082,6 +1098,9 @@ export default defineConfig({
     headers: {
       'Content-Security-Policy':
         "upgrade-insecure-requests; default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://us.i.posthog.com https://us-assets.i.posthog.com https://wiki.tu-zi.com; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: data:; frame-ancestors 'self' localhost:* 127.0.0.1:* https://api.tu-zi.com;",
+    },
+    proxy: {
+      ...meimaobingImageGatewayDevProxy,
     },
   },
 

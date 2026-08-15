@@ -10,7 +10,10 @@ Configure it with the variables in `.env.example`. Put the static app and this
 process behind one public origin. The managed frontend profile uses the fixed,
 same-origin `/meimaobing/v1` path and an HttpOnly session; no `VITE_` gateway
 URL or browser API key is required. For local development, proxy that path
-from the Vite server to this process.
+from the Vite server to this process. `apps/web/vite.config.ts` proxies
+`/meimaobing` and `/auth/meimaobing` to `MEIMAOBING_IMAGE_GATEWAY_DEV_TARGET`
+(default `http://127.0.0.1:8787`). That target is a local process address,
+not a product hostname.
 
 The gateway starts Meimaobing OIDC authorization-code login with PKCE and
 keeps the resulting session in encrypted, HttpOnly cookies. It exposes only

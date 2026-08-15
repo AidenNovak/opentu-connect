@@ -41,6 +41,7 @@ import {
 import {
   createManagedImageProviderCatalog,
   createMeimaobingAccountProviderProfile,
+  isMeimaobingAccountProfileId,
   MEIMAOBING_ACCOUNT_IMAGE_MODELS,
   MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID,
 } from './managed-image-provider-profiles';
@@ -2091,7 +2092,9 @@ class SettingsManager {
       profileName: profile?.name || null,
       providerType: profile?.providerType || null,
       baseUrl: normalizedProfileBaseUrl || normalizedLegacyBaseUrl,
-      apiKey: normalizedProfileApiKey || normalizedLegacyApiKey,
+      apiKey: isMeimaobingAccountProfileId(profile?.id)
+        ? normalizedProfileApiKey
+        : normalizedProfileApiKey || normalizedLegacyApiKey,
       source: profile ? 'preset' : 'legacy',
     };
   }
@@ -2101,7 +2104,13 @@ class SettingsManager {
     requestedModelId?: string | ModelRef | null
   ): boolean {
     const route = this.resolveInvocationRoute(routeType, requestedModelId);
-    return Boolean(route.baseUrl && route.apiKey);
+    if (!route.baseUrl) {
+      return false;
+    }
+    if (isMeimaobingAccountProfileId(route.profileId)) {
+      return true;
+    }
+    return Boolean(route.apiKey);
   }
 }
 

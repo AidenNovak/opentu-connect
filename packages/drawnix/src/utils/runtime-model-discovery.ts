@@ -29,6 +29,11 @@ import {
   isSunoLikeModelId,
 } from './suno-model-aliases';
 import { sortModelsByDisplayPriority } from './model-sort';
+import { isMeimaobingAccountProfileId } from './managed-image-provider-profiles';
+import {
+  getMeimaobingImageGatewayError,
+  MeimaobingImageGatewayError,
+} from './meimaobing-account';
 
 const LEGACY_CACHE_KEY = 'drawnix-runtime-model-discovery';
 
@@ -149,18 +154,44 @@ function extractDiscoveryErrorMessage(
   }
 }
 
+function getMeimaobingDiscoveryError(rawText: string): Error | null {
+  try {
+    return getMeimaobingImageGatewayError(JSON.parse(rawText));
+  } catch {
+    return null;
+  }
+}
+
 async function fetchRemoteModelList(
   baseUrl: string,
-  apiKey: string
+  apiKey: string,
+  useCookieSession = false
 ): Promise<string> {
-  const response = await fetch(`${baseUrl}/models`, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/models`, {
+      headers:
+        apiKey && !useCookieSession
+          ? { Authorization: `Bearer ${apiKey}` }
+          : undefined,
+      credentials: useCookieSession ? 'include' : undefined,
+    });
+  } catch (error) {
+    if (useCookieSession) {
+      throw new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE');
+    }
+    throw error;
+  }
 
   const rawText = await response.text();
   if (!response.ok) {
+    if (useCookieSession) {
+      const meimaobingError = getMeimaobingDiscoveryError(rawText);
+      if (meimaobingError) {
+        throw meimaobingError;
+      }
+      throw new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE');
+    }
     throw new Error(
       extractDiscoveryErrorMessage(
         rawText,
@@ -191,7 +222,8 @@ function buildModelDiscoveryBaseUrls(
 async function fetchRemoteModelListWithFallback(
   primaryBaseUrl: string,
   apiKey: string,
-  fallbackBaseUrls: string[] = []
+  fallbackBaseUrls: string[] = [],
+  useCookieSession = false
 ): Promise<string> {
   const baseUrls = buildModelDiscoveryBaseUrls(
     primaryBaseUrl,
@@ -201,7 +233,11 @@ async function fetchRemoteModelListWithFallback(
 
   for (let index = 0; index < baseUrls.length; index += 1) {
     try {
-      return await fetchRemoteModelList(baseUrls[index], apiKey);
+      return await fetchRemoteModelList(
+        baseUrls[index],
+        apiKey,
+        useCookieSession
+      );
     } catch (error) {
       if (error instanceof Error && !/failed to fetch/i.test(error.message)) {
         throw error;
@@ -1855,7 +1891,8 @@ class RuntimeModelDiscoveryStore {
     fallbackBaseUrls: string[] = []
   ): Promise<ModelConfig[]> {
     const trimmedApiKey = apiKey.trim();
-    if (!trimmedApiKey) {
+    const usesMeimaobingAccount = isMeimaobingAccountProfileId(profileId);
+    if (!trimmedApiKey && !usesMeimaobingAccount) {
       throw new Error('缺少 API Key');
     }
 
@@ -1878,18 +1915,32 @@ class RuntimeModelDiscoveryStore {
     const rawText = await fetchRemoteModelListWithFallback(
       normalizedBaseUrl,
       trimmedApiKey,
-      fallbackBaseUrls
+      usesMeimaobingAccount ? [] : fallbackBaseUrls,
+      usesMeimaobingAccount
     );
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(rawText);
     } catch {
+      if (usesMeimaobingAccount) {
+        throw new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE');
+      }
       throw new Error('模型列表接口未返回有效 JSON');
+    }
+
+    if (usesMeimaobingAccount) {
+      const meimaobingError = getMeimaobingImageGatewayError(parsed);
+      if (meimaobingError) {
+        throw meimaobingError;
+      }
     }
 
     const data = (parsed as { data?: unknown }).data;
     if (!Array.isArray(data)) {
+      if (usesMeimaobingAccount) {
+        throw new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE');
+      }
       throw new Error('模型列表接口缺少 data 数组');
     }
 

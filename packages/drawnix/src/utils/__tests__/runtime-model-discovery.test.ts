@@ -835,4 +835,121 @@ describe('runtime-model-discovery', () => {
       vendor: 'GPT',
     });
   });
+
+  it('discovers Meimaobing account models with cookie credentials and no API key', async () => {
+    vi.doMock('../settings-manager', () => ({
+      LEGACY_DEFAULT_PROVIDER_PROFILE_ID: 'legacy-default',
+      providerCatalogsSettings: {
+        get: () => [],
+        addListener: () => {},
+        removeListener: () => {},
+        update: async () => {},
+      },
+      providerProfilesSettings: {
+        get: () => [
+          {
+            id: 'meimaobing-account',
+            name: 'Meimaobing 图片账户',
+            enabled: true,
+          },
+        ],
+        addListener: () => {},
+        removeListener: () => {},
+      },
+      invocationPresetsSettings: {
+        addListener: () => {},
+        removeListener: () => {},
+      },
+      settingsManager: {
+        getSetting: () => ({}),
+        addListener: () => {},
+        removeListener: () => {},
+      },
+    }));
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: 'gpt-image-2',
+                category: 'image',
+              },
+            ],
+          }),
+          { status: 200 }
+        )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { runtimeModelDiscovery } = await import(
+      '../runtime-model-discovery'
+    );
+
+    await runtimeModelDiscovery.discover(
+      'meimaobing-account',
+      'https://app.example.test/meimaobing/v1',
+      ''
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      'https://app.example.test/meimaobing/v1/models'
+    );
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      headers: undefined,
+      credentials: 'include',
+    });
+  });
+
+  it('maps a malformed Meimaobing account model response to account unavailability', async () => {
+    vi.doMock('../settings-manager', () => ({
+      LEGACY_DEFAULT_PROVIDER_PROFILE_ID: 'legacy-default',
+      providerCatalogsSettings: {
+        get: () => [],
+        addListener: () => {},
+        removeListener: () => {},
+        update: async () => {},
+      },
+      providerProfilesSettings: {
+        get: () => [
+          {
+            id: 'meimaobing-account',
+            name: 'Meimaobing 图片账户',
+            enabled: true,
+          },
+        ],
+        addListener: () => {},
+        removeListener: () => {},
+      },
+      invocationPresetsSettings: {
+        addListener: () => {},
+        removeListener: () => {},
+      },
+      settingsManager: {
+        getSetting: () => ({}),
+        addListener: () => {},
+        removeListener: () => {},
+      },
+    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<!doctype html>', { status: 200 }))
+    );
+
+    const { runtimeModelDiscovery } = await import(
+      '../runtime-model-discovery'
+    );
+
+    await expect(
+      runtimeModelDiscovery.discover(
+        'meimaobing-account',
+        'https://app.example.test/meimaobing/v1',
+        ''
+      )
+    ).rejects.toMatchObject({
+      name: 'MeimaobingImageGatewayError',
+      code: 'ACCOUNT_UNAVAILABLE',
+    });
+  });
 });
