@@ -165,9 +165,12 @@ function parsePrincipalSessionVerifier(env, sessionSecret, principalSecret, clie
     throw new Error('MEIMAOBING_IMAGE_GATEWAY_AUTH_EPOCH_VERIFIER_URL must use the fixed Beta internal endpoint');
   }
   const path = parsed.pathname.replace(/\/+$/, '');
-  const localVerifier =
-    isLocalHostname(parsed.hostname) ||
-    /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(parsed.hostname);
+  const hostname = parsed.hostname.toLowerCase();
+  const composeService =
+    hostname !== 'localhost' &&
+    hostname !== '127.0.0.1' &&
+    hostname !== '::1' &&
+    /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(hostname);
   if (
     parsed.protocol !== 'http:' ||
     parsed.port !== '8080' ||
@@ -176,7 +179,7 @@ function parsePrincipalSessionVerifier(env, sessionSecret, principalSecret, clie
     parsed.search ||
     parsed.hash ||
     path !== '/internal/v1/principal-sessions' ||
-    !localVerifier
+    !composeService
   ) {
     throw new Error(
       'MEIMAOBING_IMAGE_GATEWAY_AUTH_EPOCH_VERIFIER_URL must be an internal HTTP principal-session endpoint'
@@ -643,7 +646,7 @@ function sha256Base64Url(value) {
   return createHash('sha256').update(value, 'utf8').digest('base64url');
 }
 
-function parseDiscovery(raw, issuer) {
+export function parseDiscovery(raw, issuer) {
   if (!raw || raw.issuer !== issuer) {
     throw new Error('OIDC discovery issuer does not match configuration');
   }
@@ -671,12 +674,27 @@ function issuerEndpoint(value, name, issuer) {
   } catch {
     throw new Error(`OIDC discovery ${name} is invalid`);
   }
+  let issuerUrl;
+  try {
+    issuerUrl = new URL(issuer);
+  } catch {
+    throw new Error(`OIDC discovery ${name} is outside the issuer origin`);
+  }
+  const issuerPath = issuerUrl.pathname.replace(/\/+$/, '');
+  const endpointPath = endpoint.pathname.replace(/\/+$/, '') || '/';
+  const pathOk =
+    issuerPath === '' ||
+    endpointPath === issuerPath ||
+    endpointPath.startsWith(`${issuerPath}/`);
+  const localHttp =
+    issuerUrl.protocol === 'http:' && isLocalHostname(issuerUrl.hostname);
   if (
-    endpoint.protocol !== 'https:' ||
+    endpoint.protocol !== (localHttp ? 'http:' : 'https:') ||
     endpoint.username ||
     endpoint.password ||
     endpoint.hash ||
-    endpoint.origin !== issuer
+    endpoint.origin !== issuerUrl.origin ||
+    !pathOk
   ) {
     throw new Error(`OIDC discovery ${name} is outside the issuer origin`);
   }

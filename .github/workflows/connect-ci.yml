@@ -45,7 +45,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: node --test tools/meimaobing-image-gateway/server-subject.test.mjs
+      - run: node --test tools/meimaobing-image-gateway/server-subject.test.mjs tools/meimaobing-image-gateway/server-oidc.test.mjs
       - run: bash tools/meimaobing-image-gateway/deploy/verify-beta.test.sh
 
   ci:
