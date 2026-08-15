@@ -64,6 +64,30 @@ describe('Meimaobing same-origin transport', () => {
     expect(prepared.init.credentials).toBe('include');
   });
 
+  it('sends a user-filled API key as Bearer without cookie credentials', () => {
+    const prepared = providerTransport.prepareRequest(
+      {
+        ...meimaobingContext,
+        apiKey: 'sk-user',
+        baseUrl: 'https://custom.example.test/v1',
+      },
+      {
+        path: '/images/generations',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    expect(prepared.url).toBe(
+      'https://custom.example.test/v1/images/generations'
+    );
+    expect(prepared.init.credentials).not.toBe('include');
+    expect(prepared.headers.Authorization).toBe('Bearer sk-user');
+    expect(prepared.headers['Idempotency-Key']).toBeUndefined();
+  });
+
   it('maps a Meimaobing network failure to account unavailability', async () => {
     const fetcher = vi.fn(async () => {
       throw new TypeError('Failed to fetch');
@@ -79,6 +103,28 @@ describe('Meimaobing same-origin transport', () => {
       name: 'MeimaobingImageGatewayError',
       code: 'ACCOUNT_UNAVAILABLE',
     });
+  });
+
+  it('does not remap a keyed Meimaobing request into account unavailability', async () => {
+    const networkError = new TypeError('Failed to fetch');
+    const fetcher = vi.fn(async () => {
+      throw networkError;
+    });
+
+    await expect(
+      providerTransport.send(
+        {
+          ...meimaobingContext,
+          apiKey: 'sk-user',
+          baseUrl: 'https://custom.example.test/v1',
+        },
+        {
+          path: '/images/generations',
+          method: 'POST',
+          fetcher,
+        }
+      )
+    ).rejects.toBe(networkError);
   });
 
   it('does not remap a user abort into account unavailability', async () => {

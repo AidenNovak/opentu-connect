@@ -77,6 +77,13 @@ export function isMeimaobingAccountProfileId(
   return profileId === MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID;
 }
 
+export function usesMeimaobingCookieSession(
+  profileId?: string | null,
+  apiKey?: string | null
+): boolean {
+  return isMeimaobingAccountProfileId(profileId) && !Boolean(apiKey?.trim());
+}
+
 export function resolveMeimaobingAccountBaseUrl(
   profileBaseUrl?: string
 ): string {
