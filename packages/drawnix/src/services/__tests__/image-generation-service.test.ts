@@ -31,6 +31,7 @@ const resolveInvocationRouteMock = vi.fn(
   })
 );
 const requireMeimaobingImageAccountMock = vi.fn(async () => undefined);
+const ensureMeimaobingImageRouteReadyMock = vi.fn(async () => undefined);
 const getFallbackExecutorMock = vi.fn(() => ({
   generateImage: generateImageMock,
 }));
@@ -71,6 +72,7 @@ vi.mock('../../utils/meimaobing-account', async (importOriginal) => {
   return {
     ...actual,
     requireMeimaobingImageAccount: requireMeimaobingImageAccountMock,
+    ensureMeimaobingImageRouteReady: ensureMeimaobingImageRouteReadyMock,
   };
 });
 
@@ -124,6 +126,7 @@ describe('image-generation-service', () => {
       })
     );
     requireMeimaobingImageAccountMock.mockResolvedValue(undefined);
+    ensureMeimaobingImageRouteReadyMock.mockResolvedValue(undefined);
     trackExternalTaskMock.mockImplementation((task: Task) => {
       currentTask = task;
     });
@@ -327,7 +330,7 @@ describe('image-generation-service', () => {
   });
 
   it('reports an account sign-in issue instead of a missing API key', async () => {
-    requireMeimaobingImageAccountMock.mockRejectedValue(
+    ensureMeimaobingImageRouteReadyMock.mockRejectedValue(
       new Error('请先在设置中登录 Meimaobing 账户')
     );
     resolveInvocationRouteMock.mockReturnValue({
@@ -344,6 +347,28 @@ describe('image-generation-service', () => {
       generateImage('Draw a product image', { model: 'gpt-image-2' })
     ).rejects.toThrow('请先在设置中登录 Meimaobing 账户');
     expect(createTaskMock).not.toHaveBeenCalled();
-    expect(requireMeimaobingImageAccountMock).toHaveBeenCalledTimes(1);
+    expect(ensureMeimaobingImageRouteReadyMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not require login when the Meimaobing route has an API key', async () => {
+    resolveInvocationRouteMock.mockReturnValue({
+      profileId: 'meimaobing-account',
+      baseUrl: 'https://custom.example.test/v1',
+      apiKey: 'sk-user',
+    });
+
+    const { generateImage } = await import(
+      '../media-generation/image-generation-service'
+    );
+
+    await generateImage('Draw a product image', {
+      forceMainThread: true,
+      model: 'gpt-image-2',
+    });
+    expect(ensureMeimaobingImageRouteReadyMock).toHaveBeenCalledWith({
+      profileId: 'meimaobing-account',
+      baseUrl: 'https://custom.example.test/v1',
+      apiKey: 'sk-user',
+    });
   });
 });

@@ -46,6 +46,7 @@ import {
   type ModelRef,
 } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
+import { ensureMeimaobingImageRouteReady } from '../../utils/meimaobing-account';
 import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
 import { ParametersDropdown } from '../ai-input-bar/ParametersDropdown';
 import {
@@ -2177,6 +2178,20 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({
             return;
           }
           // promptForApiKey 内部已经更新了 settings 并同步到 SW
+        }
+        try {
+          await ensureMeimaobingImageRouteReady(
+            resolveInvocationRoute('image', selectedModelRef || selectedModel)
+          );
+        } catch (error) {
+          MessagePlugin.warning(
+            error instanceof Error
+              ? error.message
+              : language === 'zh'
+              ? 'Meimaobing 账户服务暂不可用，请稍后重试'
+              : 'Meimaobing account is unavailable'
+          );
+          return;
         }
         const globalBatchTimestamp = Date.now();
         let subTaskCounter = 0;

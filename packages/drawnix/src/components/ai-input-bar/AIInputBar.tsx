@@ -155,6 +155,7 @@ import {
   type ModelRef,
 } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api/auth';
+import { ensureMeimaobingImageRouteReady } from '../../utils/meimaobing-account';
 import type { WorkflowMessageData } from '../../types/chat.types';
 import type {
   CanvasAssociationRef,
@@ -5119,6 +5120,28 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(
               setIsSubmitting(false);
               return;
             }
+          }
+          try {
+            await ensureMeimaobingImageRouteReady(
+              resolveInvocationRoute(
+                currentRouteType,
+                effectiveSelectedModelRef || effectiveSelectedModel
+              )
+            );
+          } catch (error) {
+            MessagePlugin.warning(
+              error instanceof Error
+                ? error.message
+                : 'Meimaobing 账户服务暂不可用，请稍后重试'
+            );
+            trackSubmitStatus('cancelled', {
+              reason: 'meimaobing_account_not_ready',
+              submitMode: 'preflight',
+              submit_mode: 'preflight',
+            });
+            submitLockRef.current = false;
+            setIsSubmitting(false);
+            return;
           }
           if (abortIfSubmittedBoardChanged('credentials_ready')) return;
 

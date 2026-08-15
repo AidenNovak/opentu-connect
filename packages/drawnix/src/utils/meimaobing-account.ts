@@ -1,5 +1,6 @@
 import {
   getConfiguredMeimaobingImageGatewayUrl,
+  isMeimaobingAccountProfileId,
   MEIMAOBING_IMAGE_GATEWAY_API_PATH,
 } from './managed-image-provider-profiles';
 
@@ -460,4 +461,28 @@ export async function requireMeimaobingImageAccount(
     return snapshot;
   }
   throw getMeimaobingAccountReadinessError(snapshot);
+}
+
+export async function ensureMeimaobingImageRouteReady(
+  route: {
+    profileId?: string | null;
+    apiKey?: string | null;
+    baseUrl?: string | null;
+  },
+  account: Pick<MeimaobingAccount, 'refresh'> = meimaobingAccount
+): Promise<void> {
+  if (!isMeimaobingAccountProfileId(route.profileId)) {
+    return;
+  }
+  if (route.apiKey?.trim()) {
+    return;
+  }
+  const trimmedBaseUrl = route.baseUrl?.trim() || '';
+  if (
+    !getMeimaobingGatewayPaths(trimmedBaseUrl) &&
+    /^https?:\/\//i.test(trimmedBaseUrl)
+  ) {
+    throw new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE');
+  }
+  await requireMeimaobingImageAccount(account);
 }

@@ -23,7 +23,7 @@ import {
 import { isMeimaobingAccountProfileId } from '../../utils/managed-image-provider-profiles';
 import {
   MeimaobingImageGatewayError,
-  requireMeimaobingImageAccount,
+  ensureMeimaobingImageRouteReady,
 } from '../../utils/meimaobing-account';
 import { TaskType } from '../../types/shared/core.types';
 import type { ImageGenerationParams } from '../media-executor/types';
@@ -125,7 +125,7 @@ export async function generateImage(
     options.modelRef || options.model
   );
   if (isMeimaobingAccountProfileId(route.profileId)) {
-    await requireMeimaobingImageAccount();
+    await ensureMeimaobingImageRouteReady(route);
   }
   if (
     !hasInvocationRouteCredentials('image', options.modelRef || options.model)
