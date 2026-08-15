@@ -1150,4 +1150,51 @@ describe('settings-manager', () => {
       resolveInvocationRoute('image').profileId
     ).not.toBe(MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID);
   });
+
+  it('preserves a user-filled Meimaobing API key without copying the Tuzi key', async () => {
+    mockSettingsManagerDeps();
+    localStorage.setItem(
+      DRAWNIX_SETTINGS_KEY,
+      JSON.stringify({
+        gemini: {
+          apiKey: 'legacy-tuzi-key',
+          baseUrl: 'https://api.tu-zi.com/v1',
+        },
+        providerProfiles: [
+          {
+            id: 'meimaobing-account',
+            enabled: true,
+            apiKey: 'sk-user',
+            baseUrl: 'https://custom.example.test/v1',
+          },
+        ],
+      })
+    );
+
+    const { providerProfilesSettings, resolveInvocationRoute } = await import(
+      '../settings-manager'
+    );
+    const { MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID } = await import(
+      '../managed-image-provider-profiles'
+    );
+
+    expect(
+      providerProfilesSettings
+        .get()
+        .find((profile) => profile.id === MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID)
+    ).toMatchObject({
+      apiKey: 'sk-user',
+      baseUrl: 'https://custom.example.test/v1',
+      enabled: true,
+    });
+    expect(
+      resolveInvocationRoute('image', {
+        profileId: MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID,
+        modelId: 'gpt-image-2',
+      })
+    ).toMatchObject({
+      apiKey: 'sk-user',
+      baseUrl: 'https://custom.example.test/v1',
+    });
+  });
 });

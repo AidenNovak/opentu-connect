@@ -902,6 +902,68 @@ describe('runtime-model-discovery', () => {
     });
   });
 
+  it('discovers Meimaobing account models with a user-filled API key', async () => {
+    vi.doMock('../settings-manager', () => ({
+      LEGACY_DEFAULT_PROVIDER_PROFILE_ID: 'legacy-default',
+      providerCatalogsSettings: {
+        get: () => [],
+        addListener: () => {},
+        removeListener: () => {},
+        update: async () => {},
+      },
+      providerProfilesSettings: {
+        get: () => [
+          {
+            id: 'meimaobing-account',
+            name: 'Meimaobing 图片账户',
+            enabled: true,
+          },
+        ],
+        addListener: () => {},
+        removeListener: () => {},
+      },
+      invocationPresetsSettings: {
+        addListener: () => {},
+        removeListener: () => {},
+      },
+      settingsManager: {
+        getSetting: () => ({}),
+        addListener: () => {},
+        removeListener: () => {},
+      },
+    }));
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: 'gpt-image-2',
+                category: 'image',
+              },
+            ],
+          }),
+          { status: 200 }
+        )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { runtimeModelDiscovery } = await import(
+      '../runtime-model-discovery'
+    );
+
+    await runtimeModelDiscovery.discover(
+      'meimaobing-account',
+      'https://custom.example.test/v1',
+      'sk-user'
+    );
+
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      headers: { Authorization: 'Bearer sk-user' },
+    });
+    expect(fetchMock.mock.calls[0]?.[1]?.credentials).not.toBe('include');
+  });
+
   it('maps a malformed Meimaobing account model response to account unavailability', async () => {
     vi.doMock('../settings-manager', () => ({
       LEGACY_DEFAULT_PROVIDER_PROFILE_ID: 'legacy-default',

@@ -1916,7 +1916,7 @@ class RuntimeModelDiscoveryStore {
       normalizedBaseUrl,
       trimmedApiKey,
       usesMeimaobingAccount ? [] : fallbackBaseUrls,
-      usesMeimaobingAccount
+      usesMeimaobingAccount && !trimmedApiKey
     );
 
     let parsed: unknown;

@@ -1712,6 +1712,130 @@
     gap: 10px;
   }
 
+  &__account-card {
+    display: grid;
+    gap: 14px;
+    padding: 16px;
+    border: 1px solid rgba(180, 83, 9, 0.2);
+    border-radius: 8px;
+    background: #fffaf0;
+  }
+
+  &__account-header,
+  &__account-identity,
+  &__account-actions,
+  &__account-unavailable {
+    display: flex;
+    align-items: center;
+  }
+
+  &__account-header {
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  &__account-identity {
+    min-width: 0;
+    gap: 10px;
+    color: #b45309;
+
+    > div {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+
+    strong {
+      overflow: hidden;
+      color: var(--sd-text);
+      font-size: 14px;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    span {
+      overflow: hidden;
+      color: #78716c;
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__account-icon-button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid rgba(180, 83, 9, 0.18);
+    border-radius: 8px;
+    background: #fff;
+    color: #92400e;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      border-color: rgba(180, 83, 9, 0.34);
+      background: #fff7ed;
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.55;
+    }
+  }
+
+  &__account-balance {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(180, 83, 9, 0.14);
+
+    > span {
+      color: #78716c;
+      font-size: 12px;
+    }
+
+    strong {
+      color: #1c1917;
+      font-size: 20px;
+      font-weight: 750;
+      letter-spacing: 0;
+    }
+  }
+
+  &__account-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  &__account-unavailable {
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(180, 83, 9, 0.14);
+
+    > span {
+      flex: 1;
+      color: #78716c;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .settings-dialog__ghost-button {
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+  }
+
   &__button,
   &__ghost-button,
   &__danger-button {

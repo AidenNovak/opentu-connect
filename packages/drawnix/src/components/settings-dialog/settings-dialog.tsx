@@ -54,6 +54,20 @@ import {
 } from '../../utils/runtime-model-discovery';
 import { compareModelsByDisplayPriority } from '../../utils/model-sort';
 import {
+  isMeimaobingAccountProfileId,
+  getConfiguredMeimaobingImageGatewayUrl,
+  resolveMeimaobingAccountBaseUrl,
+} from '../../utils/managed-image-provider-profiles';
+import {
+  meimaobingAccount,
+  type MeimaobingAccountSnapshot,
+} from '../../utils/meimaobing-account';
+import {
+  canManageMeimaobingModels,
+  getMeimaobingSettingsModelEmptyHint,
+  MeimaobingAccountCard,
+} from './meimaobing-account-card';
+import {
   createModelRef,
   createRouteConfig,
   DEFAULT_PROVIDER_IMAGE_API_COMPATIBILITY,
@@ -929,7 +943,8 @@ function isManagedProviderProfile(profileId: string): boolean {
     profileId === TUZI_ORIGINAL_PROVIDER_PROFILE_ID ||
     profileId === TUZI_MIX_PROVIDER_PROFILE_ID ||
     profileId === TUZI_CODEX_PROVIDER_PROFILE_ID ||
-    profileId === TUZI_BUSINESS_PROVIDER_PROFILE_ID
+    profileId === TUZI_BUSINESS_PROVIDER_PROFILE_ID ||
+    isMeimaobingAccountProfileId(profileId)
   );
 }
 
@@ -1170,6 +1185,12 @@ export const SettingsDialog = ({
     new Set()
   );
   const [isApiKeyVisible, setIsApiKeyVisible] = useState(false);
+  const [meimaobingAccountSnapshot, setMeimaobingAccountSnapshot] =
+    useState<MeimaobingAccountSnapshot>(() =>
+      meimaobingAccount.getCachedSnapshot()
+    );
+  const [isMeimaobingSignOutPending, setIsMeimaobingSignOutPending] =
+    useState(false);
   const [endpointSelectionMode, setEndpointSelectionMode] =
     useState<EndpointSelectionMode>('auto');
   const [selectedEndpointUrl, setSelectedEndpointUrl] = useState(() =>
@@ -1205,6 +1226,9 @@ export const SettingsDialog = ({
     profilesDraft.find((profile) => profile.id === selectedProfileId) ||
     profilesDraft[0] ||
     null;
+  const selectedProfileUsesMeimaobingAccount = isMeimaobingAccountProfileId(
+    selectedProfile?.id
+  );
   const isSelectedTuziProfile = isTuziProviderProfile(selectedProfile);
   const selectedImageApiCompatibilityHint = selectedProfile
     ? getImageApiCompatibilityHint(selectedProfile)
@@ -1243,7 +1267,14 @@ export const SettingsDialog = ({
     isCompactLayout &&
     (dialogWidth > 0 ? dialogWidth < 600 : viewportWidth < 600);
 
-  const canManageModels = !!selectedProfile && !!selectedProfile.apiKey.trim();
+  const canManageModels =
+    !!selectedProfile &&
+    (selectedProfileUsesMeimaobingAccount
+      ? canManageMeimaobingModels(
+          meimaobingAccountSnapshot,
+          selectedProfile.apiKey
+        )
+      : !!selectedProfile.apiKey.trim());
   const currentDraftSignature = createSettingsDraftSignature({
     profiles: profilesDraft,
     presets: presetsDraft,
@@ -1304,6 +1335,16 @@ export const SettingsDialog = ({
   useEffect(() => {
     setIsApiKeyVisible(false);
   }, [selectedProfile?.id]);
+
+  useEffect(() => {
+    return meimaobingAccount.subscribe(setMeimaobingAccountSnapshot);
+  }, []);
+
+  useEffect(() => {
+    if (selectedProfileUsesMeimaobingAccount) {
+      void meimaobingAccount.refresh();
+    }
+  }, [selectedProfileUsesMeimaobingAccount]);
 
   useEffect(() => {
     const target = dialogRef.current;
@@ -2197,6 +2238,38 @@ export const SettingsDialog = ({
     void persistPresetConfiguration(nextPresets, activePresetIdDraft);
   };
 
+  const handleMeimaobingSignIn = () => {
+    analytics.trackUIInteraction({
+      area: 'settings',
+      action: 'meimaobing_sign_in_started',
+      control: 'meimaobing_sign_in',
+      source: 'settings_dialog',
+    });
+    const destination = meimaobingAccount.beginSignIn();
+    if (!destination) {
+      MessagePlugin.warning('Meimaobing 账户服务暂不可用，请稍后重试');
+    }
+  };
+
+  const handleMeimaobingRefresh = () => {
+    void meimaobingAccount.refresh();
+  };
+
+  const handleMeimaobingSignOut = async () => {
+    setIsMeimaobingSignOutPending(true);
+    try {
+      await meimaobingAccount.signOut();
+      analytics.trackUIInteraction({
+        area: 'settings',
+        action: 'meimaobing_sign_out',
+        control: 'meimaobing_sign_out',
+        source: 'settings_dialog',
+      });
+    } finally {
+      setIsMeimaobingSignOutPending(false);
+    }
+  };
+
   const handleFetchModels = async () => {
     if (!selectedProfile) {
       MessagePlugin.warning('请先选择供应商配置');
@@ -2211,11 +2284,24 @@ export const SettingsDialog = ({
     }
 
     const trimmedApiKey = selectedProfile.apiKey.trim();
+    const usesMeimaobingAccount = isMeimaobingAccountProfileId(
+      selectedProfile.id
+    );
+    const selectedBaseUrl = selectedProfile.baseUrl.trim();
+    if (usesMeimaobingAccount && !canManageMeimaobingModels(
+      meimaobingAccountSnapshot,
+      trimmedApiKey
+    )) {
+      MessagePlugin.warning('请先登录 Meimaobing 账户，或自行填写 API Key');
+      return;
+    }
     const normalizedBaseUrl = normalizeModelApiBaseUrl(
-      selectedProfile.baseUrl.trim() || TUZI_PROVIDER_DEFAULT_BASE_URL
+      usesMeimaobingAccount
+        ? resolveMeimaobingAccountBaseUrl(selectedBaseUrl)
+        : selectedBaseUrl || TUZI_PROVIDER_DEFAULT_BASE_URL
     );
 
-    if (!trimmedApiKey) {
+    if (!trimmedApiKey && !usesMeimaobingAccount) {
       MessagePlugin.warning('请先填写 API Key');
       return;
     }
@@ -2231,8 +2317,10 @@ export const SettingsDialog = ({
       await runtimeModelDiscovery.discover(
         selectedProfile.id,
         normalizedBaseUrl,
-        trimmedApiKey,
-        isSelectedTuziProfile
+        usesMeimaobingAccount && !trimmedApiKey ? '' : trimmedApiKey,
+        usesMeimaobingAccount
+          ? []
+          : isSelectedTuziProfile
           ? tuziApiEndpointOptions.map((endpoint) => endpoint.url)
           : []
       );
@@ -3194,6 +3282,16 @@ export const SettingsDialog = ({
               />
             </div>
 
+            {selectedProfileUsesMeimaobingAccount ? (
+              <MeimaobingAccountCard
+                snapshot={meimaobingAccountSnapshot}
+                isSignOutPending={isMeimaobingSignOutPending}
+                onSignIn={handleMeimaobingSignIn}
+                onRefresh={handleMeimaobingRefresh}
+                onSignOut={() => void handleMeimaobingSignOut()}
+              />
+            ) : (
+              <>
             <div className="settings-dialog__field settings-dialog__field--column">
               <label className="settings-dialog__label settings-dialog__label--stacked">
                 接口类型
@@ -3296,7 +3394,10 @@ export const SettingsDialog = ({
                 开启后，支持异步接口的图片模型将优先使用 /v1/videos 异步接口生成
               </span>
             </div>
+              </>
+            )}
 
+            {!selectedProfileUsesMeimaobingAccount ? (
             <div className="settings-dialog__field settings-dialog__field--column settings-dialog__field--full">
               <label className="settings-dialog__label settings-dialog__label--stacked">
                 图标 URL
@@ -3317,6 +3418,7 @@ export const SettingsDialog = ({
                 支持填写远程图片地址；未填写时将根据供应商名称生成默认图标。
               </span>
             </div>
+            ) : null}
 
             <div className="settings-dialog__field settings-dialog__field--column settings-dialog__field--full">
               <label className="settings-dialog__label settings-dialog__label--stacked">
@@ -3332,8 +3434,17 @@ export const SettingsDialog = ({
                     baseUrl: event.target.value,
                   }))
                 }
-                placeholder={TUZI_PROVIDER_DEFAULT_BASE_URL}
+                placeholder={
+                  selectedProfileUsesMeimaobingAccount
+                    ? getConfiguredMeimaobingImageGatewayUrl()
+                    : TUZI_PROVIDER_DEFAULT_BASE_URL
+                }
               />
+              {selectedProfileUsesMeimaobingAccount ? (
+                <span className="settings-dialog__field-hint">
+                  默认同域登录走 /meimaobing/v1。也可自行填写其他 API 地址。
+                </span>
+              ) : null}
               {isSelectedTuziProfile ? (
                 <div className="settings-dialog__endpoint-panel">
                   <div className="settings-dialog__endpoint-toolbar">
@@ -3521,6 +3632,7 @@ export const SettingsDialog = ({
                 <label className="settings-dialog__label settings-dialog__label--stacked">
                   API Key
                 </label>
+                {!selectedProfileUsesMeimaobingAccount ? (
                 <HoverTip
                   content={
                     <div style={{ maxWidth: 480 }}>
@@ -3574,6 +3686,7 @@ export const SettingsDialog = ({
                 >
                   <InfoCircleIcon className="settings-dialog__tooltip-icon" />
                 </HoverTip>
+                ) : null}
               </div>
               <div
                 style={{
@@ -3647,6 +3760,11 @@ export const SettingsDialog = ({
                   )}
                 </button>
               </div>
+              {selectedProfileUsesMeimaobingAccount ? (
+                <span className="settings-dialog__field-hint">
+                  默认同域登录，无需填写。也可自行填写 API Key。
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -3717,7 +3835,13 @@ export const SettingsDialog = ({
       ? getProviderDraftState(selectedProfile, initialProfiles)
       : 'saved';
     const canLaunchBenchmark =
-      !!selectedProfile?.apiKey.trim() &&
+      !!selectedProfile &&
+      (selectedProfileUsesMeimaobingAccount
+        ? canManageMeimaobingModels(
+            meimaobingAccountSnapshot,
+            selectedProfile.apiKey
+          )
+        : !!selectedProfile.apiKey.trim()) &&
       providerDraftState === 'saved' &&
       runtimeState.status !== 'loading';
     const isDefaultProvider =
@@ -4365,7 +4489,12 @@ export const SettingsDialog = ({
           </div>
         ) : shouldShowHintState ? (
           <div className="settings-dialog__model-empty">
-            填写 API Key 后即可获取模型，获取完成后可在这里检索和浏览。
+            {selectedProfileUsesMeimaobingAccount
+              ? getMeimaobingSettingsModelEmptyHint(
+                  meimaobingAccountSnapshot,
+                  Boolean(selectedProfile?.apiKey.trim())
+                )
+              : '填写 API Key 后即可获取模型，获取完成后可在这里检索和浏览。'}
           </div>
         ) : (
           <div className="settings-dialog__model-empty">还没有已添加的模型</div>
