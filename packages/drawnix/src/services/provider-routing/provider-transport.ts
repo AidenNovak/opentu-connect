@@ -11,7 +11,10 @@ import {
   normalizeTuziApiEndpointUrl,
   TUZI_API_REQUEST_ID_CORS_ENDPOINTS,
 } from './tuzi-api-endpoints';
-import { isMeimaobingAccountProfileId } from '../../utils/managed-image-provider-profiles';
+import {
+  isMeimaobingAccountProfileId,
+  usesMeimaobingCookieSession,
+} from '../../utils/managed-image-provider-profiles';
 import { MeimaobingImageGatewayError } from '../../utils/meimaobing-account';
 
 function trimTrailingSlashes(value: string): string {
@@ -571,6 +574,22 @@ function resolveMeimaobingIdempotencyKey(requestId?: string): string {
   return createImageIdempotencyKey();
 }
 
+function applyMeimaobingApiKeyHeader(
+  context: ResolvedProviderContext,
+  headers: Record<string, string>
+): Record<string, string> {
+  const apiKey = context.apiKey?.trim() || '';
+  if (
+    !isMeimaobingAccountProfileId(context.profileId) ||
+    !apiKey ||
+    hasHeader(headers, 'Authorization')
+  ) {
+    return headers;
+  }
+
+  return { ...headers, Authorization: `Bearer ${apiKey}` };
+}
+
 function applyMeimaobingSessionHeaders(
   context: ResolvedProviderContext,
   request: ProviderTransportRequest,
@@ -581,7 +600,7 @@ function applyMeimaobingSessionHeaders(
     method === 'POST' &&
     (request.path === '/images/generations' || request.path === '/images/edits');
   if (
-    !isMeimaobingAccountProfileId(context.profileId) ||
+    !usesMeimaobingCookieSession(context.profileId, context.apiKey) ||
     !isPaidImageRequest ||
     hasHeader(headers, 'Idempotency-Key')
   ) {
@@ -868,16 +887,20 @@ export class ProviderTransport {
       mergedHeaders
     );
     const requestIdHeaders = applyRequestIdHeader(
-      authenticatedHeaders,
+      applyMeimaobingApiKeyHeader(credentialContext, authenticatedHeaders),
       request.requestId,
       canAttachProviderRequestIdHeader(routedContext, request),
       Boolean(request.requestId) || isReadOnlyRequestMethod(request.method)
     );
-    const finalHeaders = applyMeimaobingSessionHeaders(
-      context,
-      request,
-      requestIdHeaders
+    const cookieSession = usesMeimaobingCookieSession(
+      context.profileId,
+      context.apiKey
     );
+    const sendCookieCredentials =
+      cookieSession && shouldInheritProviderCredentials(context, requestUrl);
+    const finalHeaders = sendCookieCredentials
+      ? applyMeimaobingSessionHeaders(context, request, requestIdHeaders)
+      : requestIdHeaders;
 
     return {
       url,
@@ -889,9 +912,7 @@ export class ProviderTransport {
         signal: request.signal,
         credentials:
           request.credentials ||
-          (isMeimaobingAccountProfileId(context.profileId)
-            ? 'include'
-            : undefined),
+          (sendCookieCredentials ? 'include' : undefined),
       },
     };
   }
@@ -1019,7 +1040,7 @@ export class ProviderTransport {
         }
       }
       if (
-        isMeimaobingAccountProfileId(context.profileId) &&
+        usesMeimaobingCookieSession(context.profileId, context.apiKey) &&
         !(error instanceof Error && error.name === 'AbortError')
       ) {
         throw new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE');

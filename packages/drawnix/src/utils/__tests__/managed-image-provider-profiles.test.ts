@@ -6,6 +6,7 @@ import {
   isMeimaobingAccountProfileId,
   MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID,
   MEIMAOBING_IMAGE_GATEWAY_API_PATH,
+  usesMeimaobingCookieSession,
 } from '../managed-image-provider-profiles';
 
 describe('Meimaobing account provider profile', () => {
@@ -31,6 +32,14 @@ describe('Meimaobing account provider profile', () => {
 
     expect(profile.apiKey).toBe('sk-user');
     expect(profile.baseUrl).toBe('https://custom.example.test/v1');
+  });
+
+  it('uses a cookie session only when the account profile has no API key', () => {
+    expect(usesMeimaobingCookieSession('meimaobing-account', '')).toBe(true);
+    expect(usesMeimaobingCookieSession('meimaobing-account', 'sk-user')).toBe(
+      false
+    );
+    expect(usesMeimaobingCookieSession('legacy-default', '')).toBe(false);
   });
 
   it('does not treat NewAPI or TokenHub profile ids as the account profile', () => {
