@@ -17,8 +17,14 @@ import { taskStorageWriter } from '../media-executor/task-storage-writer';
 import { executorFactory, waitForTaskCompletion } from '../media-executor';
 import {
   hasInvocationRouteCredentials,
+  resolveInvocationRoute,
   settingsManager,
 } from '../../utils/settings-manager';
+import { isMeimaobingAccountProfileId } from '../../utils/managed-image-provider-profiles';
+import {
+  MeimaobingImageGatewayError,
+  requireMeimaobingImageAccount,
+} from '../../utils/meimaobing-account';
 import { TaskType } from '../../types/shared/core.types';
 import type { ImageGenerationParams } from '../media-executor/types';
 import { taskQueueService } from '../task-queue-service';
@@ -114,10 +120,19 @@ export async function generateImage(
 
   // 确保 API Key 已解密
   await settingsManager.waitForInitialization();
+  const route = resolveInvocationRoute(
+    'image',
+    options.modelRef || options.model
+  );
+  if (isMeimaobingAccountProfileId(route.profileId)) {
+    await requireMeimaobingImageAccount();
+  }
   if (
     !hasInvocationRouteCredentials('image', options.modelRef || options.model)
   ) {
-    throw new Error('未配置 API Key，请在设置中配置');
+    throw isMeimaobingAccountProfileId(route.profileId)
+      ? new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE')
+      : new Error('未配置 API Key，请在设置中配置');
   }
 
   // 创建任务记录

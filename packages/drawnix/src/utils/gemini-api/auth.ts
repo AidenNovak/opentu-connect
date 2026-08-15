@@ -4,6 +4,22 @@
 
 import { GeminiConfig } from './types';
 import { geminiSettings } from '../settings-manager';
+import { isMeimaobingAccountProfileId } from '../managed-image-provider-profiles';
+import {
+  getMeimaobingGatewayPaths,
+  MeimaobingImageGatewayError,
+  requireMeimaobingImageAccount,
+} from '../meimaobing-account';
+
+function usesMeimaobingAccount(config: GeminiConfig): boolean {
+  if (isMeimaobingAccountProfileId(config.provider?.profileId)) {
+    return true;
+  }
+
+  // Older callers may construct GeminiConfig directly and omit the provider
+  // snapshot. The reserved same-origin route is still an account request.
+  return getMeimaobingGatewayPaths(config.baseUrl) !== null;
+}
 
 /**
  * DOM弹窗获取API Key
@@ -142,6 +158,17 @@ export async function validateAndEnsureConfig(
   // 检查 baseUrl
   if (!config.baseUrl) {
     throw new Error('Base URL 是必需的');
+  }
+
+  if (usesMeimaobingAccount(config)) {
+    // The managed image route has no browser-held API key. Keep an accidental
+    // non-same-origin override from turning into an API-key prompt, then let
+    // the account endpoint supply the actionable signed-out/balance state.
+    if (!getMeimaobingGatewayPaths(config.baseUrl)) {
+      throw new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE');
+    }
+    await requireMeimaobingImageAccount();
+    return config;
   }
 
   // 检查 apiKey，优先从全局设置获取

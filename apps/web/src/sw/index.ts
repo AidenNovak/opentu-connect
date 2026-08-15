@@ -4148,6 +4148,14 @@ function markUrlAsFailed(url: string): void {
   failedUrlCache.set(url, Date.now());
 }
 
+function isMeimaobingImageGatewayPath(pathname: string): boolean {
+  return (
+    pathname === '/meimaobing/account' ||
+    pathname.startsWith('/meimaobing/v1/') ||
+    pathname.startsWith('/auth/meimaobing/')
+  );
+}
+
 sw.addEventListener('fetch', (event: FetchEvent) => {
   const url = new URL(event.request.url);
   const startTime = Date.now();
@@ -4167,6 +4175,23 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   }
 
   lastObservedClientFetchAt = startTime;
+
+  // Keep the HttpOnly session and OIDC redirects off the static cache path.
+  if (
+    url.origin === location.origin &&
+    isMeimaobingImageGatewayPath(url.pathname)
+  ) {
+    addDebugLog({
+      type: 'fetch',
+      url: event.request.url,
+      method: event.request.method,
+      requestType: 'passthrough',
+      details: 'Passthrough: Meimaobing Image Gateway',
+      status: 0,
+      duration: 0,
+    });
+    return;
+  }
 
   if (shouldKickIdlePrefetchFromFetch(event, url)) {
     const clientPath = `${url.pathname}${url.search}`;

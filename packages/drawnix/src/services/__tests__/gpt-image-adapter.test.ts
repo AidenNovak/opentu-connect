@@ -547,4 +547,70 @@ describe('gpt-image-adapter', () => {
     const [url] = fetcher.mock.calls[0];
     expect(url).toBe('https://api.openai.com/v1/images/edits');
   });
+
+  it('maps an HTML 404 from the Meimaobing gateway to account unavailability', async () => {
+    const fetcher = vi.fn(
+      async () =>
+        new Response('<!doctype html><title>Not Found</title>', {
+          status: 404,
+          headers: { 'Content-Type': 'text/html' },
+        })
+    );
+
+    await expect(
+      gptImageAdapter.generateImage(
+        {
+          baseUrl: 'https://app.example.test/meimaobing/v1',
+          authType: 'custom',
+          fetcher,
+          provider: {
+            profileId: 'meimaobing-account',
+            profileName: 'Meimaobing 图片账户',
+            providerType: 'openai-compatible',
+            baseUrl: 'https://app.example.test/meimaobing/v1',
+            apiKey: '',
+            authType: 'custom',
+          },
+        },
+        {
+          model: 'gpt-image-2',
+          prompt: 'Draw a product image',
+        }
+      )
+    ).rejects.toMatchObject({
+      name: 'MeimaobingImageGatewayError',
+      code: 'ACCOUNT_UNAVAILABLE',
+      message: 'Meimaobing 账户服务暂不可用，请稍后重试',
+    });
+  });
+
+  it('maps an unstructured Meimaobing 401 response to sign-in required', async () => {
+    const fetcher = vi.fn(async () => new Response(null, { status: 401 }));
+
+    await expect(
+      gptImageAdapter.generateImage(
+        {
+          baseUrl: 'https://app.example.test/meimaobing/v1',
+          authType: 'custom',
+          fetcher,
+          provider: {
+            profileId: 'meimaobing-account',
+            profileName: 'Meimaobing 图片账户',
+            providerType: 'openai-compatible',
+            baseUrl: 'https://app.example.test/meimaobing/v1',
+            apiKey: '',
+            authType: 'custom',
+          },
+        },
+        {
+          model: 'gpt-image-2',
+          prompt: 'Draw a product image',
+        }
+      )
+    ).rejects.toMatchObject({
+      name: 'MeimaobingImageGatewayError',
+      code: 'SIGN_IN_REQUIRED',
+      message: '请先在设置中登录 Meimaobing 账户',
+    });
+  });
 });

@@ -1101,4 +1101,53 @@ describe('settings-manager', () => {
       enabled: false,
     });
   });
+
+  it('treats an enabled Meimaobing account route as credentialed without an API key', async () => {
+    mockSettingsManagerDeps();
+    localStorage.setItem(
+      DRAWNIX_SETTINGS_KEY,
+      JSON.stringify({
+        gemini: {
+          apiKey: 'legacy-test-key',
+          baseUrl: 'https://legacy.example.test/v1',
+        },
+        providerProfiles: [
+          {
+            id: 'meimaobing-account',
+            enabled: true,
+          },
+        ],
+      })
+    );
+
+    const {
+      hasInvocationRouteCredentials,
+      resolveInvocationRoute,
+    } = await import('../settings-manager');
+    const { MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID } = await import(
+      '../managed-image-provider-profiles'
+    );
+
+    expect(
+      resolveInvocationRoute('image', {
+        profileId: MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID,
+        modelId: 'gpt-image-2',
+      })
+    ).toMatchObject({
+      profileId: MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID,
+      modelId: 'gpt-image-2',
+      apiKey: '',
+      baseUrl: expect.stringMatching(/\/meimaobing\/v1$/),
+    });
+    expect(
+      hasInvocationRouteCredentials('image', {
+        profileId: MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID,
+        modelId: 'gpt-image-2',
+      })
+    ).toBe(true);
+    expect(hasInvocationRouteCredentials('image')).toBe(true);
+    expect(
+      resolveInvocationRoute('image').profileId
+    ).not.toBe(MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID);
+  });
 });

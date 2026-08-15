@@ -16,6 +16,21 @@ const generateImageMock = vi.fn(
 const waitForTaskCompletionMock = vi.fn();
 const waitForInitializationMock = vi.fn(async () => undefined);
 const hasInvocationRouteCredentialsMock = vi.fn(() => true);
+const resolveInvocationRouteMock = vi.fn(
+  (
+    _routeType: string,
+    requestedModelId?: string | { modelId?: string | null } | null
+  ) => ({
+    profileId: 'legacy-default',
+    modelId:
+      typeof requestedModelId === 'string'
+        ? requestedModelId
+        : requestedModelId?.modelId || 'gpt-image-2',
+    baseUrl: 'https://api.tu-zi.com/v1',
+    apiKey: 'legacy-key',
+  })
+);
+const requireMeimaobingImageAccountMock = vi.fn(async () => undefined);
 const getFallbackExecutorMock = vi.fn(() => ({
   generateImage: generateImageMock,
 }));
@@ -45,6 +60,17 @@ vi.mock('../../utils/settings-manager', async (importOriginal) => {
       waitForInitialization: waitForInitializationMock,
     },
     hasInvocationRouteCredentials: hasInvocationRouteCredentialsMock,
+    resolveInvocationRoute: resolveInvocationRouteMock,
+  };
+});
+
+vi.mock('../../utils/meimaobing-account', async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import('../../utils/meimaobing-account')
+  >();
+  return {
+    ...actual,
+    requireMeimaobingImageAccount: requireMeimaobingImageAccountMock,
   };
 });
 
@@ -82,6 +108,22 @@ describe('image-generation-service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     currentTask = undefined;
+    hasInvocationRouteCredentialsMock.mockReturnValue(true);
+    resolveInvocationRouteMock.mockImplementation(
+      (
+        _routeType: string,
+        requestedModelId?: string | { modelId?: string | null } | null
+      ) => ({
+        profileId: 'legacy-default',
+        modelId:
+          typeof requestedModelId === 'string'
+            ? requestedModelId
+            : requestedModelId?.modelId || 'gpt-image-2',
+        baseUrl: 'https://api.tu-zi.com/v1',
+        apiKey: 'legacy-key',
+      })
+    );
+    requireMeimaobingImageAccountMock.mockResolvedValue(undefined);
     trackExternalTaskMock.mockImplementation((task: Task) => {
       currentTask = task;
     });
@@ -282,5 +324,26 @@ describe('image-generation-service', () => {
       })
     );
     expect(waitForTaskCompletionMock).not.toHaveBeenCalled();
+  });
+
+  it('reports an account sign-in issue instead of a missing API key', async () => {
+    requireMeimaobingImageAccountMock.mockRejectedValue(
+      new Error('请先在设置中登录 Meimaobing 账户')
+    );
+    resolveInvocationRouteMock.mockReturnValue({
+      profileId: 'meimaobing-account',
+      baseUrl: '/meimaobing/v1',
+      apiKey: '',
+    });
+
+    const { generateImage } = await import(
+      '../media-generation/image-generation-service'
+    );
+
+    await expect(
+      generateImage('Draw a product image', { model: 'gpt-image-2' })
+    ).rejects.toThrow('请先在设置中登录 Meimaobing 账户');
+    expect(createTaskMock).not.toHaveBeenCalled();
+    expect(requireMeimaobingImageAccountMock).toHaveBeenCalledTimes(1);
   });
 });

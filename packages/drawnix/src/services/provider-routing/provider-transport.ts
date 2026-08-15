@@ -11,6 +11,8 @@ import {
   normalizeTuziApiEndpointUrl,
   TUZI_API_REQUEST_ID_CORS_ENDPOINTS,
 } from './tuzi-api-endpoints';
+import { isMeimaobingAccountProfileId } from '../../utils/managed-image-provider-profiles';
+import { MeimaobingImageGatewayError } from '../../utils/meimaobing-account';
 
 function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, '');
@@ -538,6 +540,43 @@ function applyAuthHeaders(
   }
 }
 
+function hasHeader(headers: Record<string, string>, name: string): boolean {
+  const normalizedName = name.toLowerCase();
+  return Object.keys(headers).some(
+    (headerName) => headerName.toLowerCase() === normalizedName
+  );
+}
+
+function createImageIdempotencyKey(): string {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  if (randomUuid) return `mbimg-${randomUuid}`;
+  return `mbimg-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 14)}`;
+}
+
+function applyMeimaobingSessionHeaders(
+  context: ResolvedProviderContext,
+  request: ProviderTransportRequest,
+  headers: Record<string, string>
+): Record<string, string> {
+  const method = (request.method || 'GET').toUpperCase();
+  const isPaidImageRequest =
+    method === 'POST' &&
+    (request.path === '/images/generations' || request.path === '/images/edits');
+  if (
+    !isMeimaobingAccountProfileId(context.profileId) ||
+    !isPaidImageRequest ||
+    hasHeader(headers, 'Idempotency-Key')
+  ) {
+    return headers;
+  }
+
+  // Direct adapter callers do not always have a task ID. Task-backed calls
+  // pass a stable key; this fallback still prevents an unkeyed paid request.
+  return { ...headers, 'Idempotency-Key': createImageIdempotencyKey() };
+}
+
 function applyAuthQuery(
   context: ResolvedProviderContext,
   query: Record<string, string | number | boolean | null | undefined>
@@ -809,11 +848,16 @@ export class ProviderTransport {
       credentialContext,
       mergedHeaders
     );
-    const finalHeaders = applyRequestIdHeader(
+    const requestIdHeaders = applyRequestIdHeader(
       authenticatedHeaders,
       request.requestId,
       canAttachProviderRequestIdHeader(routedContext, request),
       Boolean(request.requestId) || isReadOnlyRequestMethod(request.method)
+    );
+    const finalHeaders = applyMeimaobingSessionHeaders(
+      context,
+      request,
+      requestIdHeaders
     );
 
     return {
@@ -824,7 +868,11 @@ export class ProviderTransport {
         headers: finalHeaders,
         body: request.body,
         signal: request.signal,
-        credentials: request.credentials,
+        credentials:
+          request.credentials ||
+          (isMeimaobingAccountProfileId(context.profileId)
+            ? 'include'
+            : undefined),
       },
     };
   }
@@ -950,6 +998,12 @@ export class ProviderTransport {
             }
           }
         }
+      }
+      if (
+        isMeimaobingAccountProfileId(context.profileId) &&
+        !(error instanceof Error && error.name === 'AbortError')
+      ) {
+        throw new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE');
       }
       throw error;
     } finally {
