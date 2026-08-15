@@ -108,14 +108,24 @@ function parseIssuer(value) {
   } catch {
     throw new Error('MEIMAOBING_IMAGE_GATEWAY_OIDC_ISSUER must be an absolute URL');
   }
-  if (
-    parsed.protocol !== 'https:' ||
-    parsed.username ||
-    parsed.password ||
-    parsed.pathname !== '/' ||
-    parsed.search ||
-    parsed.hash
-  ) {
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error(
+      'MEIMAOBING_IMAGE_GATEWAY_OIDC_ISSUER must contain only an HTTPS origin'
+    );
+  }
+  const path = parsed.pathname.replace(/\/+$/, '') || '/';
+  if (isLocalHostname(parsed.hostname)) {
+    if (
+      (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') ||
+      (path !== '/' && path !== '/issuer')
+    ) {
+      throw new Error(
+        'MEIMAOBING_IMAGE_GATEWAY_OIDC_ISSUER local value must be an HTTP(S) origin or /issuer'
+      );
+    }
+    return path === '/' ? parsed.origin : `${parsed.origin}${path}`;
+  }
+  if (parsed.protocol !== 'https:' || path !== '/') {
     throw new Error(
       'MEIMAOBING_IMAGE_GATEWAY_OIDC_ISSUER must contain only an HTTPS origin'
     );
@@ -154,17 +164,26 @@ function parsePrincipalSessionVerifier(env, sessionSecret, principalSecret, clie
   } catch {
     throw new Error('MEIMAOBING_IMAGE_GATEWAY_AUTH_EPOCH_VERIFIER_URL must use the fixed Beta internal endpoint');
   }
+  const path = parsed.pathname.replace(/\/+$/, '');
+  const hostname = parsed.hostname.toLowerCase();
+  const composeService =
+    hostname !== 'localhost' &&
+    hostname !== '127.0.0.1' &&
+    hostname !== '::1' &&
+    /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(hostname);
   if (
     parsed.protocol !== 'http:' ||
-    parsed.hostname !== 'beta-better-auth-center' ||
     parsed.port !== '8080' ||
     parsed.username ||
     parsed.password ||
     parsed.search ||
     parsed.hash ||
-    parsed.pathname.replace(/\/+$/, '') !== '/internal/v1/principal-sessions'
+    path !== '/internal/v1/principal-sessions' ||
+    !composeService
   ) {
-    throw new Error('MEIMAOBING_IMAGE_GATEWAY_AUTH_EPOCH_VERIFIER_URL must use the fixed Beta internal endpoint');
+    throw new Error(
+      'MEIMAOBING_IMAGE_GATEWAY_AUTH_EPOCH_VERIFIER_URL must be an internal HTTP principal-session endpoint'
+    );
   }
   if (requiredString(env.MEIMAOBING_IMAGE_GATEWAY_AUTH_EPOCH_VERIFIER_PRODUCT, 'MEIMAOBING_IMAGE_GATEWAY_AUTH_EPOCH_VERIFIER_PRODUCT') !== 'image') {
     throw new Error('MEIMAOBING_IMAGE_GATEWAY_AUTH_EPOCH_VERIFIER_PRODUCT must remain image');
@@ -201,6 +220,7 @@ function isLocalHostname(hostname) {
   const normalized = hostname.toLowerCase();
   return (
     normalized === 'localhost' ||
+    normalized.endsWith('.localhost') ||
     normalized === '127.0.0.1' ||
     normalized === '::1'
   );
@@ -626,7 +646,7 @@ function sha256Base64Url(value) {
   return createHash('sha256').update(value, 'utf8').digest('base64url');
 }
 
-function parseDiscovery(raw, issuer) {
+export function parseDiscovery(raw, issuer) {
   if (!raw || raw.issuer !== issuer) {
     throw new Error('OIDC discovery issuer does not match configuration');
   }
@@ -654,12 +674,27 @@ function issuerEndpoint(value, name, issuer) {
   } catch {
     throw new Error(`OIDC discovery ${name} is invalid`);
   }
+  let issuerUrl;
+  try {
+    issuerUrl = new URL(issuer);
+  } catch {
+    throw new Error(`OIDC discovery ${name} is outside the issuer origin`);
+  }
+  const issuerPath = issuerUrl.pathname.replace(/\/+$/, '');
+  const endpointPath = endpoint.pathname.replace(/\/+$/, '') || '/';
+  const pathOk =
+    issuerPath === '' ||
+    endpointPath === issuerPath ||
+    endpointPath.startsWith(`${issuerPath}/`);
+  const localHttp =
+    issuerUrl.protocol === 'http:' && isLocalHostname(issuerUrl.hostname);
   if (
-    endpoint.protocol !== 'https:' ||
+    endpoint.protocol !== (localHttp ? 'http:' : 'https:') ||
     endpoint.username ||
     endpoint.password ||
     endpoint.hash ||
-    endpoint.origin !== issuer
+    endpoint.origin !== issuerUrl.origin ||
+    !pathOk
   ) {
     throw new Error(`OIDC discovery ${name} is outside the issuer origin`);
   }
