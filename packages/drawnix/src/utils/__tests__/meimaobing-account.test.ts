@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createMeimaobingAccount,
+  ensureMeimaobingImageRouteReady,
   getMeimaobingGatewayPaths,
   requireMeimaobingImageAccount,
   type MeimaobingGatewayPaths,
@@ -136,5 +137,64 @@ describe('MeimaobingAccount', () => {
     expect(
       getMeimaobingGatewayPaths('https://api.example.test/meimaobing/v1')
     ).toBeNull();
+  });
+
+  it('rejects a cookie-less custom Meimaobing URL without an API key', async () => {
+    await expect(
+      ensureMeimaobingImageRouteReady({
+        profileId: 'meimaobing-account',
+        apiKey: '',
+        baseUrl: 'https://custom.example.test/v1',
+      })
+    ).rejects.toMatchObject({
+      code: 'ACCOUNT_UNAVAILABLE',
+    });
+  });
+
+  it('skips login when the Meimaobing route already has an API key', async () => {
+    const refresh = vi.fn(async () => ({
+      status: 'signed-out' as const,
+      authenticated: false,
+      account: null,
+      wallet: null,
+      topUpUrl: null,
+      errorCode: 'SIGN_IN_REQUIRED' as const,
+    }));
+
+    await expect(
+      ensureMeimaobingImageRouteReady(
+        {
+          profileId: 'meimaobing-account',
+          apiKey: 'sk-user',
+          baseUrl: 'https://custom.example.test/v1',
+        },
+        { refresh }
+      )
+    ).resolves.toBeUndefined();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('requires login for a cookie-session Meimaobing route', async () => {
+    await expect(
+      ensureMeimaobingImageRouteReady(
+        {
+          profileId: 'meimaobing-account',
+          apiKey: '',
+          baseUrl: '/meimaobing/v1',
+        },
+        {
+          refresh: async () => ({
+            status: 'signed-out',
+            authenticated: false,
+            account: null,
+            wallet: null,
+            topUpUrl: null,
+            errorCode: 'SIGN_IN_REQUIRED',
+          }),
+        }
+      )
+    ).rejects.toMatchObject({
+      code: 'SIGN_IN_REQUIRED',
+    });
   });
 });

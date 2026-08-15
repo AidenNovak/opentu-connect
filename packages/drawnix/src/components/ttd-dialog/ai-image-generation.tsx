@@ -64,6 +64,7 @@ import {
   type ModelRef,
 } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
+import { ensureMeimaobingImageRouteReady } from '../../utils/meimaobing-account';
 import { buildMJPromptSuffix } from '../../utils/mj-params';
 import {
   getCompatibleParams,
@@ -729,6 +730,21 @@ const AIImageGeneration = ({
           );
           return;
         }
+      }
+
+      try {
+        await ensureMeimaobingImageRouteReady(
+          resolveInvocationRoute('image', currentModelRef || currentModel)
+        );
+      } catch (error) {
+        setError(
+          error instanceof Error
+            ? error.message
+            : language === 'zh'
+            ? 'Meimaobing 账户服务暂不可用，请稍后重试'
+            : 'Meimaobing account is unavailable'
+        );
+        return;
       }
 
       if (isMJModel) {

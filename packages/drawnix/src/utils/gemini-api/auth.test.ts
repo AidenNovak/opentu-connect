@@ -3,6 +3,7 @@ import type { GeminiConfig } from './types';
 import type { MeimaobingGatewayPaths } from '../meimaobing-account';
 
 const requireMeimaobingImageAccountMock = vi.fn(async () => undefined);
+const ensureMeimaobingImageRouteReadyMock = vi.fn(async () => undefined);
 const gatewayPaths: MeimaobingGatewayPaths = {
   apiBaseUrl: 'https://app.example.test/meimaobing/v1',
   accountUrl: 'https://app.example.test/meimaobing/account',
@@ -23,6 +24,7 @@ vi.mock('../settings-manager', () => ({
 
 vi.mock('../meimaobing-account', () => ({
   getMeimaobingGatewayPaths: getMeimaobingGatewayPathsMock,
+  ensureMeimaobingImageRouteReady: ensureMeimaobingImageRouteReadyMock,
   requireMeimaobingImageAccount: requireMeimaobingImageAccountMock,
   MeimaobingImageGatewayError: class MeimaobingImageGatewayError extends Error {
     readonly code: string;
@@ -57,14 +59,22 @@ describe('validateAndEnsureConfig', () => {
     };
 
     await expect(validateAndEnsureConfig(config)).resolves.toBe(config);
-    expect(getMeimaobingGatewayPathsMock).toHaveBeenCalledWith(config.baseUrl);
-    expect(requireMeimaobingImageAccountMock).toHaveBeenCalledTimes(1);
+    expect(ensureMeimaobingImageRouteReadyMock).toHaveBeenCalledWith({
+      profileId: 'meimaobing-account',
+      apiKey: '',
+      baseUrl: 'https://app.example.test/meimaobing/v1',
+    });
     expect(geminiSettingsGetMock).not.toHaveBeenCalled();
   });
 
   it('normalizes a non-same-origin managed route to an account error', async () => {
     const { validateAndEnsureConfig } = await import('./auth');
-    getMeimaobingGatewayPathsMock.mockReturnValue(null);
+    const { MeimaobingImageGatewayError } = await import(
+      '../meimaobing-account'
+    );
+    ensureMeimaobingImageRouteReadyMock.mockRejectedValueOnce(
+      new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE')
+    );
 
     await expect(
       validateAndEnsureConfig({
@@ -81,7 +91,7 @@ describe('validateAndEnsureConfig', () => {
       })
     ).rejects.toMatchObject({ code: 'ACCOUNT_UNAVAILABLE' });
 
-    expect(requireMeimaobingImageAccountMock).not.toHaveBeenCalled();
+    expect(ensureMeimaobingImageRouteReadyMock).toHaveBeenCalledTimes(1);
     expect(geminiSettingsGetMock).not.toHaveBeenCalled();
   });
 
@@ -97,7 +107,33 @@ describe('validateAndEnsureConfig', () => {
       baseUrl: 'https://app.example.test/meimaobing/v1',
     });
 
-    expect(requireMeimaobingImageAccountMock).toHaveBeenCalledTimes(1);
+    expect(ensureMeimaobingImageRouteReadyMock).toHaveBeenCalledTimes(1);
+    expect(geminiSettingsGetMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts a user-filled Meimaobing API key without login', async () => {
+    const { validateAndEnsureConfig } = await import('./auth');
+    const config: GeminiConfig = {
+      apiKey: 'sk-user',
+      baseUrl: 'https://custom.example.test/v1',
+      provider: {
+        profileId: 'meimaobing-account',
+        profileName: 'Meimaobing 图片账户',
+        providerType: 'openai-compatible',
+        baseUrl: 'https://custom.example.test/v1',
+        apiKey: 'sk-user',
+        authType: 'custom',
+      },
+    };
+
+    await expect(validateAndEnsureConfig(config)).resolves.toMatchObject({
+      apiKey: 'sk-user',
+    });
+    expect(ensureMeimaobingImageRouteReadyMock).toHaveBeenCalledWith({
+      profileId: 'meimaobing-account',
+      apiKey: 'sk-user',
+      baseUrl: 'https://custom.example.test/v1',
+    });
     expect(geminiSettingsGetMock).not.toHaveBeenCalled();
   });
 });
