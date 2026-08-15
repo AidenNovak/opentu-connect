@@ -77,22 +77,26 @@ export function isMeimaobingAccountProfileId(
   return profileId === MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID;
 }
 
+export function resolveMeimaobingAccountBaseUrl(
+  profileBaseUrl?: string
+): string {
+  const trimmed = profileBaseUrl?.trim() || '';
+  return trimmed || getConfiguredMeimaobingImageGatewayUrl();
+}
+
 export function createMeimaobingAccountProviderProfile(
   profile?: Partial<ProviderProfile>
 ): ProviderProfile {
-  const baseUrl = getConfiguredMeimaobingImageGatewayUrl();
-
   return {
     id: MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID,
-    name: 'Meimaobing 图片账户',
-    homepageUrl: 'https://meimaobing.ai/',
+    name: profile?.name?.trim() || 'Meimaobing 图片账户',
+    homepageUrl: profile?.homepageUrl || 'https://meimaobing.ai/',
     providerType: 'openai-compatible',
-    baseUrl,
-    // Authenticated by the HttpOnly Meimaobing browser session, not an API key.
-    apiKey: '',
+    baseUrl: resolveMeimaobingAccountBaseUrl(profile?.baseUrl),
+    apiKey: typeof profile?.apiKey === 'string' ? profile.apiKey : '',
     authType: 'custom',
     imageApiCompatibility: profile?.imageApiCompatibility || 'openai-gpt-image',
-    preferAsyncImageEndpoint: false,
+    preferAsyncImageEndpoint: profile?.preferAsyncImageEndpoint === true,
     enabled: profile?.enabled === true,
     capabilities: { ...IMAGE_ONLY_CAPABILITIES },
   };

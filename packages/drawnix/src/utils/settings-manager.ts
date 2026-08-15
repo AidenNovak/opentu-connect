@@ -1151,9 +1151,6 @@ class SettingsManager {
     const meimaobingAccountProfile = this.buildMeimaobingAccountProfile(
       existingMeimaobingAccountProfile
     );
-    if (existingMeimaobingAccountProfile?.apiKey) {
-      this.shouldPersistSettingsAfterInitialization = true;
-    }
     const legacyPreset = this.buildLegacyDefaultPreset(gemini);
 
     const providerProfiles = [

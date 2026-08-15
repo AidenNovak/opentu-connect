@@ -22,6 +22,17 @@ describe('Meimaobing account provider profile', () => {
     expect(profile.enabled).toBe(true);
   });
 
+  it('keeps a user-filled API key and custom base URL', () => {
+    const profile = createMeimaobingAccountProviderProfile({
+      apiKey: 'sk-user',
+      baseUrl: 'https://custom.example.test/v1',
+      enabled: true,
+    });
+
+    expect(profile.apiKey).toBe('sk-user');
+    expect(profile.baseUrl).toBe('https://custom.example.test/v1');
+  });
+
   it('does not treat NewAPI or TokenHub profile ids as the account profile', () => {
     expect(isMeimaobingAccountProfileId('meimaobing-account')).toBe(true);
     expect(isMeimaobingAccountProfileId('newapi-images')).toBe(false);
