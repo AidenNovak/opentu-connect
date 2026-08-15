@@ -993,4 +993,112 @@ describe('settings-manager', () => {
       source: 'preset',
     });
   });
+
+  it('registers a disabled Meimaobing account profile without changing the default image route', async () => {
+    mockSettingsManagerDeps();
+
+    const {
+      DEFAULT_INVOCATION_PRESET_ID,
+      LEGACY_DEFAULT_PROVIDER_PROFILE_ID,
+      providerCatalogsSettings,
+      providerProfilesSettings,
+      settingsManager,
+    } = await import('../settings-manager');
+    const { MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID } = await import(
+      '../managed-image-provider-profiles'
+    );
+
+    const accountProfile = providerProfilesSettings
+      .get()
+      .find((profile) => profile.id === MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID);
+
+    expect(accountProfile).toMatchObject({
+      enabled: false,
+      apiKey: '',
+      authType: 'custom',
+      capabilities: {
+        supportsImage: true,
+        supportsVideo: false,
+      },
+    });
+    expect(accountProfile?.baseUrl).toMatch(/\/meimaobing\/v1$/);
+    expect(
+      providerProfilesSettings
+        .get()
+        .some((profile) => profile.id === 'newapi-images')
+    ).toBe(false);
+    expect(
+      providerProfilesSettings
+        .get()
+        .some((profile) => profile.id === 'tokenhub-images')
+    ).toBe(false);
+
+    const defaultPreset = settingsManager
+      .getSettings()
+      .invocationPresets.find(
+        (preset) => preset.id === DEFAULT_INVOCATION_PRESET_ID
+      );
+    expect(defaultPreset?.image.defaultModelRef).toMatchObject({
+      profileId: LEGACY_DEFAULT_PROVIDER_PROFILE_ID,
+    });
+
+    expect(
+      providerCatalogsSettings
+        .get()
+        .find(
+          (catalog) =>
+            catalog.profileId === MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID
+        )
+        ?.discoveredModels.map((model) => model.id)
+    ).toEqual([
+      'gemini-3.1-flash-lite-image',
+      'gemini-3.1-flash-image',
+      'gemini-3-pro-image',
+      'gemini-2.5-flash-image',
+      'gpt-image-2',
+      'codex-gpt-image-2',
+    ]);
+  });
+
+  it('does not migrate a stored newapi-images profile onto the account route', async () => {
+    mockSettingsManagerDeps();
+    localStorage.setItem(
+      DRAWNIX_SETTINGS_KEY,
+      JSON.stringify({
+        providerProfiles: [
+          {
+            id: 'newapi-images',
+            name: 'legacy bridge',
+            providerType: 'openai-compatible',
+            baseUrl: 'https://bridge.example.test/v1',
+            apiKey: 'stale-browser-token',
+            authType: 'bearer',
+            enabled: true,
+            capabilities: {},
+          },
+        ],
+      })
+    );
+
+    const { providerProfilesSettings } = await import('../settings-manager');
+    const { MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID } = await import(
+      '../managed-image-provider-profiles'
+    );
+    const profiles = providerProfilesSettings.get();
+
+    expect(
+      profiles.find((profile) => profile.id === 'newapi-images')
+    ).toMatchObject({
+      apiKey: 'stale-browser-token',
+      enabled: true,
+    });
+    expect(
+      profiles.find(
+        (profile) => profile.id === MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID
+      )
+    ).toMatchObject({
+      apiKey: '',
+      enabled: false,
+    });
+  });
 });
