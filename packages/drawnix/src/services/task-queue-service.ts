@@ -28,7 +28,8 @@ import {
 } from './media-executor/task-storage-writer';
 import { taskStorageReader } from './task-storage-reader';
 import { executorFactory, waitForTaskCompletion } from './media-executor';
-import { hasInvocationRouteCredentials } from '../utils/settings-manager';
+import { hasInvocationRouteCredentials, resolveInvocationRoute } from '../utils/settings-manager';
+import { getMissingInvocationCredentialsError } from '../utils/meimaobing-account';
 import { DEFAULT_AUDIO_MODEL_ID } from '../constants/model-config';
 import { analytics } from '../utils/posthog-analytics';
 import {
@@ -846,17 +847,22 @@ class TaskQueueService {
         console.warn(
           '[TaskQueueService] No API configuration, cannot execute task'
         );
+        const route = resolveInvocationRoute(
+          routeType,
+          task.params.modelRef || task.params.model
+        );
+        const missingCredentials = getMissingInvocationCredentialsError(route);
         if (task.type === TaskType.IMAGE && submissionRequestId) {
           await this.failImageAttempt(
             task.id,
             submissionRequestId,
-            { code: 'NO_API_KEY', message: '未配置 API Key' },
+            missingCredentials,
             { allowLegacyRequestId: true }
           );
           return;
         }
         this.updateTaskStatus(task.id, TaskStatus.FAILED, {
-          error: { code: 'NO_API_KEY', message: '未配置 API Key' },
+          error: missingCredentials,
         });
         return;
       }

@@ -486,3 +486,18 @@ export async function ensureMeimaobingImageRouteReady(
   }
   await requireMeimaobingImageAccount(account);
 }
+
+export function getMissingInvocationCredentialsError(route: {
+  profileId?: string | null;
+  baseUrl?: string | null;
+}): { code: string; message: string } {
+  if (isMeimaobingAccountProfileId(route.profileId)) {
+    return {
+      code: 'MEIMAOBING_ACCOUNT_NOT_READY',
+      message: route.baseUrl
+        ? '请先在设置中登录 Meimaobing 账户'
+        : '请先在设置中启用 Meimaobing 图片账户',
+    };
+  }
+  return { code: 'NO_API_KEY', message: '未配置 API Key' };
+}

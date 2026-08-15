@@ -3,6 +3,7 @@ import {
   createMeimaobingAccount,
   ensureMeimaobingImageRouteReady,
   getMeimaobingGatewayPaths,
+  getMissingInvocationCredentialsError,
   requireMeimaobingImageAccount,
   type MeimaobingGatewayPaths,
 } from '../meimaobing-account';
@@ -195,6 +196,27 @@ describe('MeimaobingAccount', () => {
       )
     ).rejects.toMatchObject({
       code: 'SIGN_IN_REQUIRED',
+    });
+  });
+
+  it('describes a Meimaobing credential gap without calling it a missing API key', () => {
+    expect(
+      getMissingInvocationCredentialsError({
+        profileId: 'meimaobing-account',
+        baseUrl: '/meimaobing/v1',
+      })
+    ).toEqual({
+      code: 'MEIMAOBING_ACCOUNT_NOT_READY',
+      message: '请先在设置中登录 Meimaobing 账户',
+    });
+    expect(
+      getMissingInvocationCredentialsError({
+        profileId: 'legacy-default',
+        baseUrl: 'https://api.tu-zi.com/v1',
+      })
+    ).toEqual({
+      code: 'NO_API_KEY',
+      message: '未配置 API Key',
     });
   });
 });
