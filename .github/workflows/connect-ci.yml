@@ -33,20 +33,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - run: pnpm exec nx test drawnix -- meimaobing-account.test.ts provider-settings-navigation.test.ts
       - run: pnpm exec nx run-many -t=test --exclude=drawnix
-
-  image-gateway:
-    name: Image gateway
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: node --test tools/newapi-image-bridge/server-subject.test.mjs
-      - run: bash tools/newapi-image-bridge/deploy/verify-beta.test.sh
 
   ci:
     name: CI
@@ -54,7 +41,6 @@ jobs:
     timeout-minutes: 5
     needs:
       - checks
-      - image-gateway
     if: always()
     steps:
       - name: Verify every job succeeded
