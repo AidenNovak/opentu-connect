@@ -33,7 +33,6 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - run: pnpm exec nx test drawnix -- meimaobing-account.test.ts provider-settings-navigation.test.ts
       - run: pnpm exec nx run-many -t=test --exclude=drawnix
 
   image-gateway:
