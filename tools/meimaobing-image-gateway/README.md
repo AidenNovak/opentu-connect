@@ -19,19 +19,17 @@ routes. Browser API keys are neither accepted nor stored. The gateway sends a
 body-bound, image-only Product Assertion to the private Inference Broker,
 which owns Application Wallet authorization and TokenHub credentials.
 
+Public origin, OIDC issuer, client id, and Store recharge URL are environment
+values. This repository does not ship a product hostname.
+
 ## Closed beta deployment
 
-The deployment artifacts in [`deploy/`](./deploy/) are deliberately closed by
-default. They run the gateway on a loopback-only host port and attach it to
-the existing `meimaobing-beta-internal` Docker network; they do not publish a
-new public port. The reviewed OpenTu Beta origin is
-`https://image.truthtruth.co`: its host-Nginx site is
-[`deploy/nginx/meimaobing-image-beta.conf`](./deploy/nginx/meimaobing-image-beta.conf),
-which serves versioned static files from
-`/opt/meimaobing-beta/image-web/current` and includes the gateway routes.
+The deployment artifacts in [`deploy/`](./deploy/) are templates. They run the
+gateway on a loopback-only host port and attach it to the existing
+`meimaobing-beta-internal` Docker network; they do not publish a new public
+port. Replace the `example.test` hostnames in the Nginx site and secret
+example with the origin you are actually deploying.
 
-The Beta source now includes the `image` Product Assertion surface,
-`/v1/account`, image reservation quotes, and final image reconciliation.
 `MEIMAOBING_IMAGE_GATEWAY_ENABLED` defaults to `false`; changing it to `true`
 requires the immutable Broker, Billing Bridge, and TokenHub images to be
 verified together, the exact OIDC callback to be registered, and a coordinated
@@ -39,12 +37,10 @@ rollout approval. The deployment verifier requires that its non-secret Compose
 value and the gateway secret agree, but an enabled gateway is not by itself a
 wallet-acceptance result.
 
-The Beta gateway accepts only
-`MEIMAOBING_IMAGE_GATEWAY_STORE_INGRESS_PROFILE=cutover-truthtruth-isolated`: its
-`top_up_url` must be exactly
-`https://store.truthtruth.co/user/recharge/index`. It uses the isolated
-`https://auth.truthtruth.co` OIDC issuer and a dedicated Image Beta client;
-the verifier rejects a Prod issuer, legacy Store path, or any other profile.
+The verifier checks HTTPS origins, cookie security, secret length and
+separation, principal-HMAC match with the Broker, a named Store ingress
+profile, and an HTTPS `top_up_url`. It does not pin a particular public DNS
+name.
 
 The intended production boundary is:
 
@@ -70,11 +66,9 @@ The expected OIDC redirect is always:
 ${MEIMAOBING_IMAGE_GATEWAY_PUBLIC_ORIGIN}/auth/meimaobing/callback
 ```
 
-`auth.truthtruth.co` publishes the isolated Beta OIDC discovery document.
-Register `meimaobing-image-gateway-truthtruth-beta` in that Beta Dex with the
-exact callback above. Keep its separate secret in the private Beta Dex
-environment and the gateway's mode-0600 secret file, never in the static
-application.
+Register a dedicated Image Dex client against the environment's OIDC issuer
+with that exact callback. Keep its secret in the private Dex environment and
+the gateway's mode-0600 secret file, never in the static application.
 
 The callback origin must remain identical to the origin where the customer
 started OpenTu login. The transaction cookie is intentionally host-only; do
@@ -83,10 +77,11 @@ an unrelated hostname.
 
 When the private contract is ready, install both the site template and
 [`deploy/nginx/meimaobing-image-gateway.location.conf`](./deploy/nginx/meimaobing-image-gateway.location.conf)
-on the host. The routes keep all browser traffic same-origin, preserve
-`Origin` for CSRF checks, support multipart image edits, and have no broad
-CORS policy. The site also prevents a stale service worker from preserving the
-pre-account error UI after a release.
+on the host after replacing `example.test` hostnames. The routes keep all
+browser traffic same-origin, preserve `Origin` for CSRF checks, support
+multipart image edits, and have no broad CORS policy. The site also prevents
+a stale service worker from preserving the pre-account error UI after a
+release.
 
 ## Public routes
 

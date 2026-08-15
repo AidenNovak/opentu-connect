@@ -49,7 +49,7 @@ This change introduces only the browser-facing Image Gateway process. The OpenTu
 
 - Decision: Closed-beta deploy stays loopback-only on `meimaobing-beta-internal`.
 
-  Compose publishes `127.0.0.1:${MEIMAOBING_IMAGE_GATEWAY_HOST_PORT:-8787}:8787`. Host Nginx on `image.truthtruth.co` includes the gateway locations. The verifier requires digest-pinned images, mode-0600 secrets, the isolated issuer `https://auth.truthtruth.co`, and Store profile `cutover-truthtruth-isolated`.
+  Compose publishes `127.0.0.1:${MEIMAOBING_IMAGE_GATEWAY_HOST_PORT:-8787}:8787`. Host Nginx includes the gateway locations on the configured public origin. The verifier requires digest-pinned images, mode-0600 secrets, HTTPS public/OIDC origins, and a named Store ingress profile. It does not pin a test DNS name such as a copied Beta hostname.
 
 ## Risks / Trade-offs
 

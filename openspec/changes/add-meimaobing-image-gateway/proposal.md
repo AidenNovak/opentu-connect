@@ -12,7 +12,7 @@ OpenTu image traffic on Meimaobing must settle the Application Wallet, not NewAP
 - Attach an image-only Product Assertion when calling the private Inference Broker. Do not accept or store a browser API key.
 - Default `MEIMAOBING_IMAGE_GATEWAY_ENABLED` to `false`. A disabled gateway must not start OIDC login or proxy image traffic.
 - Keep Dex protobuf `sub` unwrap and bearer `token_type` case handling aligned with Store and Super App.
-- Keep closed-beta Compose/Nginx/verifier artifacts on a loopback host port and the existing `meimaobing-beta-internal` network.
+- Keep closed-beta Compose/Nginx/verifier artifacts on a loopback host port and the existing `meimaobing-beta-internal` network. Public origin, OIDC issuer, and Store URL are configuration, not a baked-in hostname.
 
 ## Non-Goals
 

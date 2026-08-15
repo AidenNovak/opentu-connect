@@ -11,9 +11,9 @@ import {
 import { createServer } from 'node:http';
 import { pathToFileURL } from 'node:url';
 
-// The Image Beta gateway is an isolated Truthtruth OIDC client. Production
-// Meimaobing auth is never a fallback for this browser-facing Beta surface.
-const DEFAULT_OIDC_ISSUER = 'https://auth.truthtruth.co';
+// The Image gateway is an isolated Meimaobing OIDC client. The issuer comes
+// from env; there is no baked-in public hostname.
+
 const DEFAULT_IMAGE_MODELS = [
   'gemini-3.1-flash-lite-image',
   'gemini-3.1-flash-image',
@@ -101,9 +101,10 @@ function parsePublicOrigin(value) {
 }
 
 function parseIssuer(value) {
+  const raw = requiredString(value, 'MEIMAOBING_IMAGE_GATEWAY_OIDC_ISSUER');
   let parsed;
   try {
-    parsed = new URL(String(value || DEFAULT_OIDC_ISSUER).trim());
+    parsed = new URL(raw);
   } catch {
     throw new Error('MEIMAOBING_IMAGE_GATEWAY_OIDC_ISSUER must be an absolute URL');
   }

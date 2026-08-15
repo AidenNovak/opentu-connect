@@ -52,9 +52,9 @@ The system SHALL start Meimaobing OIDC authorization-code login with PKCE agains
 
 #### Scenario: Callback stays on the public origin
 
-- **GIVEN** `MEIMAOBING_IMAGE_GATEWAY_PUBLIC_ORIGIN` is `https://image.truthtruth.co`
+- **GIVEN** `MEIMAOBING_IMAGE_GATEWAY_PUBLIC_ORIGIN` is `https://image.example.test`
 - **WHEN** the gateway redirects to the authorization endpoint
-- **THEN** `redirect_uri` SHALL be `https://image.truthtruth.co/auth/meimaobing/callback`
+- **THEN** `redirect_uri` SHALL be `https://image.example.test/auth/meimaobing/callback`
 
 #### Scenario: Beta issuer is not production fallback
 
@@ -139,11 +139,11 @@ The system SHALL treat OpenTu image traffic as Application Wallet spend through 
 
 ### Requirement: Closed Beta Deployment Guardrails
 
-The system SHALL keep Beta deployment artifacts closed by default: loopback host port, existing private network, digest-pinned image, and verifier checks that the feature gate, issuer, Store profile, and principal secrets match.
+The system SHALL keep Beta deployment artifacts closed by default: loopback host port, existing private network, digest-pinned image, and verifier checks that the feature gate, HTTPS origins, Store profile, and principal secrets match. Public hostnames SHALL come from environment configuration, not from a baked-in test domain.
 
-#### Scenario: Verifier rejects a non-isolated Store profile
+#### Scenario: Verifier rejects an empty Store profile
 
-- **GIVEN** `MEIMAOBING_IMAGE_GATEWAY_STORE_INGRESS_PROFILE` is not `cutover-truthtruth-isolated`
+- **GIVEN** `MEIMAOBING_IMAGE_GATEWAY_STORE_INGRESS_PROFILE` is empty
 - **WHEN** `deploy/verify-beta.sh` runs
 - **THEN** verification SHALL fail
 
