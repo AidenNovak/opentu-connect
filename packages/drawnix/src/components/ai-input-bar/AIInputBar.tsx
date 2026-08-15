@@ -5128,6 +5128,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(
                 effectiveSelectedModelRef || effectiveSelectedModel
               )
             );
+            if (effectiveGenerationType === 'agent') {
+              await ensureMeimaobingImageRouteReady(
+                resolveInvocationRoute(
+                  'image',
+                  selectedAgentImageModelRef || selectedAgentImageModel
+                )
+              );
+            }
           } catch (error) {
             MessagePlugin.warning(
               error instanceof Error
