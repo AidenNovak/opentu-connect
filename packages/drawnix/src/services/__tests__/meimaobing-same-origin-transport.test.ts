@@ -27,6 +27,20 @@ describe('Meimaobing same-origin transport', () => {
     expect(prepared.headers['Idempotency-Key']).toMatch(/^mbimg-/);
   });
 
+  it('uses the task request id as the Meimaobing idempotency key', () => {
+    const prepared = providerTransport.prepareRequest(meimaobingContext, {
+      path: '/images/generations',
+      method: 'POST',
+      requestId: '550e8400-e29b-41d4-a716-446655440000',
+    });
+
+    expect(prepared.headers['Idempotency-Key']).toBe(
+      '550e8400-e29b-41d4-a716-446655440000'
+    );
+    expect(prepared.headers['X-Request-Id']).toBeUndefined();
+    expect(prepared.init.credentials).toBe('include');
+  });
+
   it('keeps a caller-supplied idempotency key', () => {
     const prepared = providerTransport.prepareRequest(meimaobingContext, {
       path: '/images/edits',

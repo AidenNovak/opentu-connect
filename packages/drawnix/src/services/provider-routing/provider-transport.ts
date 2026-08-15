@@ -555,6 +555,22 @@ function createImageIdempotencyKey(): string {
     .slice(2, 14)}`;
 }
 
+function isUsableMeimaobingIdempotencyKey(value: string): boolean {
+  return (
+    value.length >= 8 &&
+    value.length <= 255 &&
+    /^[A-Za-z0-9._:-]+$/.test(value)
+  );
+}
+
+function resolveMeimaobingIdempotencyKey(requestId?: string): string {
+  const trimmed = requestId?.trim() || '';
+  if (isUsableMeimaobingIdempotencyKey(trimmed)) {
+    return trimmed;
+  }
+  return createImageIdempotencyKey();
+}
+
 function applyMeimaobingSessionHeaders(
   context: ResolvedProviderContext,
   request: ProviderTransportRequest,
@@ -572,9 +588,12 @@ function applyMeimaobingSessionHeaders(
     return headers;
   }
 
-  // Direct adapter callers do not always have a task ID. Task-backed calls
-  // pass a stable key; this fallback still prevents an unkeyed paid request.
-  return { ...headers, 'Idempotency-Key': createImageIdempotencyKey() };
+  // Task-backed submits pass submissionRequestId as request.requestId.
+  // Direct adapter callers do not; they still need an unkeyed-request guard.
+  return {
+    ...headers,
+    'Idempotency-Key': resolveMeimaobingIdempotencyKey(request.requestId),
+  };
 }
 
 function applyAuthQuery(
