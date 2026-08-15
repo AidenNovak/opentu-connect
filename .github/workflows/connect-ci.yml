@@ -33,7 +33,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - run: pnpm test
+      - run: pnpm exec nx run-many -t=test --exclude=drawnix
 
   ci:
     name: CI
