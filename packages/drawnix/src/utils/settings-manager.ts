@@ -38,6 +38,12 @@ import {
   type ModelConfig,
   type ModelType,
 } from '../constants/model-config';
+import {
+  createManagedImageProviderCatalog,
+  createMeimaobingAccountProviderProfile,
+  MEIMAOBING_ACCOUNT_IMAGE_MODELS,
+  MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID,
+} from './managed-image-provider-profiles';
 
 export {
   DEFAULT_PROVIDER_IMAGE_API_COMPATIBILITY,
@@ -816,6 +822,12 @@ class SettingsManager {
     };
   }
 
+  private buildMeimaobingAccountProfile(
+    profile?: Partial<ProviderProfile>
+  ): ProviderProfile {
+    return createMeimaobingAccountProviderProfile(profile);
+  }
+
   private buildLegacyDefaultPreset(gemini: GeminiSettings): InvocationPreset {
     const profileId = LEGACY_DEFAULT_PROVIDER_PROFILE_ID;
     return {
@@ -1080,6 +1092,9 @@ class SettingsManager {
     const existingTuziBusinessProfile = settings.providerProfiles.find(
       (profile) => profile.id === TUZI_BUSINESS_PROVIDER_PROFILE_ID
     );
+    const existingMeimaobingAccountProfile = settings.providerProfiles.find(
+      (profile) => profile.id === MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID
+    );
     const migrations: SettingsMigrations = { ...settings.migrations };
     const shouldRunLegacyDefaultImageMigration =
       migrations.legacyDefaultImageApiCompatibilityV1 !== true;
@@ -1132,6 +1147,12 @@ class SettingsManager {
     const tuziBusinessProfile = this.buildTuziBusinessProfile(
       existingTuziBusinessProfile
     );
+    const meimaobingAccountProfile = this.buildMeimaobingAccountProfile(
+      existingMeimaobingAccountProfile
+    );
+    if (existingMeimaobingAccountProfile?.apiKey) {
+      this.shouldPersistSettingsAfterInitialization = true;
+    }
     const legacyPreset = this.buildLegacyDefaultPreset(gemini);
 
     const providerProfiles = [
@@ -1140,13 +1161,15 @@ class SettingsManager {
       tuziMixProfile,
       tuziCodexProfile,
       tuziBusinessProfile,
+      meimaobingAccountProfile,
       ...settings.providerProfiles.filter(
         (profile) =>
           profile.id !== LEGACY_DEFAULT_PROVIDER_PROFILE_ID &&
           profile.id !== TUZI_ORIGINAL_PROVIDER_PROFILE_ID &&
           profile.id !== TUZI_MIX_PROVIDER_PROFILE_ID &&
           profile.id !== TUZI_CODEX_PROVIDER_PROFILE_ID &&
-          profile.id !== TUZI_BUSINESS_PROVIDER_PROFILE_ID
+          profile.id !== TUZI_BUSINESS_PROVIDER_PROFILE_ID &&
+          profile.id !== MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID
       ),
     ];
 
@@ -1155,7 +1178,11 @@ class SettingsManager {
     );
 
     const providerCatalogs = settings.providerCatalogs
-      .filter((catalog) => validProfileIds.has(catalog.profileId))
+      .filter(
+        (catalog) =>
+          validProfileIds.has(catalog.profileId) &&
+          catalog.profileId !== MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID
+      )
       .map((catalog) => ({
         ...catalog,
         selectedModelIds: catalog.selectedModelIds.filter(
@@ -1237,6 +1264,17 @@ class SettingsManager {
         error: null,
       });
     }
+
+    providerCatalogs.push(
+      createManagedImageProviderCatalog(
+        meimaobingAccountProfile,
+        MEIMAOBING_ACCOUNT_IMAGE_MODELS,
+        settings.providerCatalogs.find(
+          (catalog) =>
+            catalog.profileId === MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID
+        )
+      )
+    );
 
     const invocationPresets = [...settings.invocationPresets];
     const legacyPresetIndex = invocationPresets.findIndex(
