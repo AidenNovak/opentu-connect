@@ -10,6 +10,7 @@ import {
   resolveInvocationRoute,
   type ModelRef,
 } from '../utils/settings-manager';
+import { isMeimaobingAccountProfileId } from '../utils/managed-image-provider-profiles';
 import {
   resolveInvocationPlanFromRoute,
   type ProviderModelBinding,
@@ -201,7 +202,10 @@ export function assertTaskInvocationRouteAvailable(
     throw new Error('原供应商配置已停用，无法继续查询异步任务状态');
   }
 
-  if (!profile.apiKey?.trim()) {
+  if (
+    !isMeimaobingAccountProfileId(profile.id) &&
+    !profile.apiKey?.trim()
+  ) {
     throw new Error('原供应商 API Key 未配置，无法继续查询异步任务状态');
   }
 
