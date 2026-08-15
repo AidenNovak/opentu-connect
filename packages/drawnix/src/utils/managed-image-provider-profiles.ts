@@ -77,11 +77,42 @@ export function isMeimaobingAccountProfileId(
   return profileId === MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID;
 }
 
+export function isMeimaobingSameOriginGatewayUrl(
+  baseUrl?: string | null
+): boolean {
+  const trimmed = baseUrl?.trim() || MEIMAOBING_IMAGE_GATEWAY_API_PATH;
+  const origin = getBrowserOrigin();
+  try {
+    if (!origin) {
+      if (/^https?:\/\//i.test(trimmed)) {
+        return false;
+      }
+      const path = trimmed.split(/[?#]/, 1)[0].replace(/\/+$/, '');
+      return path === MEIMAOBING_IMAGE_GATEWAY_API_PATH;
+    }
+
+    const resolved = new URL(trimmed, origin);
+    return (
+      resolved.origin === origin &&
+      resolved.pathname.replace(/\/+$/, '') === MEIMAOBING_IMAGE_GATEWAY_API_PATH &&
+      !resolved.search &&
+      !resolved.hash
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function usesMeimaobingCookieSession(
   profileId?: string | null,
-  apiKey?: string | null
+  baseUrl?: string | null
 ): boolean {
-  return isMeimaobingAccountProfileId(profileId) && !Boolean(apiKey?.trim());
+  // Same-origin gateway traffic always uses the HttpOnly session, even if the
+  // user also stored an API key. Bearer is only for a custom absolute API URL.
+  return (
+    isMeimaobingAccountProfileId(profileId) &&
+    isMeimaobingSameOriginGatewayUrl(baseUrl)
+  );
 }
 
 export function resolveMeimaobingAccountBaseUrl(

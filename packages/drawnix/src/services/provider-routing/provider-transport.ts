@@ -582,7 +582,8 @@ function applyMeimaobingApiKeyHeader(
   if (
     !isMeimaobingAccountProfileId(context.profileId) ||
     !apiKey ||
-    hasHeader(headers, 'Authorization')
+    hasHeader(headers, 'Authorization') ||
+    usesMeimaobingCookieSession(context.profileId, context.baseUrl)
   ) {
     return headers;
   }
@@ -600,7 +601,7 @@ function applyMeimaobingSessionHeaders(
     method === 'POST' &&
     (request.path === '/images/generations' || request.path === '/images/edits');
   if (
-    !usesMeimaobingCookieSession(context.profileId, context.apiKey) ||
+    !usesMeimaobingCookieSession(context.profileId, context.baseUrl) ||
     !isPaidImageRequest ||
     hasHeader(headers, 'Idempotency-Key')
   ) {
@@ -894,7 +895,7 @@ export class ProviderTransport {
     );
     const cookieSession = usesMeimaobingCookieSession(
       context.profileId,
-      context.apiKey
+      context.baseUrl
     );
     const sendCookieCredentials =
       cookieSession && shouldInheritProviderCredentials(context, requestUrl);
@@ -1040,7 +1041,7 @@ export class ProviderTransport {
         }
       }
       if (
-        usesMeimaobingCookieSession(context.profileId, context.apiKey) &&
+        usesMeimaobingCookieSession(context.profileId, context.baseUrl) &&
         !(error instanceof Error && error.name === 'AbortError')
       ) {
         throw new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE');

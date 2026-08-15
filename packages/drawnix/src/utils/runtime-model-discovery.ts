@@ -29,7 +29,10 @@ import {
   isSunoLikeModelId,
 } from './suno-model-aliases';
 import { sortModelsByDisplayPriority } from './model-sort';
-import { isMeimaobingAccountProfileId } from './managed-image-provider-profiles';
+import {
+  isMeimaobingAccountProfileId,
+  usesMeimaobingCookieSession,
+} from './managed-image-provider-profiles';
 import {
   getMeimaobingImageGatewayError,
   MeimaobingImageGatewayError,
@@ -1916,7 +1919,7 @@ class RuntimeModelDiscoveryStore {
       normalizedBaseUrl,
       trimmedApiKey,
       usesMeimaobingAccount ? [] : fallbackBaseUrls,
-      usesMeimaobingAccount && !trimmedApiKey
+      usesMeimaobingCookieSession(profileId, normalizedBaseUrl)
     );
 
     let parsed: unknown;

@@ -2,6 +2,7 @@ import {
   getConfiguredMeimaobingImageGatewayUrl,
   isMeimaobingAccountProfileId,
   MEIMAOBING_IMAGE_GATEWAY_API_PATH,
+  usesMeimaobingCookieSession,
 } from './managed-image-provider-profiles';
 
 export type MeimaobingAccountStatus =
@@ -472,6 +473,10 @@ export async function ensureMeimaobingImageRouteReady(
   account: Pick<MeimaobingAccount, 'refresh'> = meimaobingAccount
 ): Promise<void> {
   if (!isMeimaobingAccountProfileId(route.profileId)) {
+    return;
+  }
+  if (usesMeimaobingCookieSession(route.profileId, route.baseUrl)) {
+    await requireMeimaobingImageAccount(account);
     return;
   }
   if (route.apiKey?.trim()) {

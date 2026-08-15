@@ -34,12 +34,17 @@ describe('Meimaobing account provider profile', () => {
     expect(profile.baseUrl).toBe('https://custom.example.test/v1');
   });
 
-  it('uses a cookie session only when the account profile has no API key', () => {
+  it('uses a cookie session for the same-origin gateway, even if an API key is stored', () => {
     expect(usesMeimaobingCookieSession('meimaobing-account', '')).toBe(true);
-    expect(usesMeimaobingCookieSession('meimaobing-account', 'sk-user')).toBe(
+    expect(
+      usesMeimaobingCookieSession('meimaobing-account', '/meimaobing/v1')
+    ).toBe(true);
+    expect(
+      usesMeimaobingCookieSession('meimaobing-account', 'https://custom.example.test/v1')
+    ).toBe(false);
+    expect(usesMeimaobingCookieSession('legacy-default', '/meimaobing/v1')).toBe(
       false
     );
-    expect(usesMeimaobingCookieSession('legacy-default', '')).toBe(false);
   });
 
   it('does not treat NewAPI or TokenHub profile ids as the account profile', () => {

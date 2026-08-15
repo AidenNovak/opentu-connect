@@ -152,7 +152,7 @@ describe('MeimaobingAccount', () => {
     });
   });
 
-  it('skips login when the Meimaobing route already has an API key', async () => {
+  it('skips login when a custom Meimaobing URL already has an API key', async () => {
     const refresh = vi.fn(async () => ({
       status: 'signed-out' as const,
       authenticated: false,
@@ -173,6 +173,30 @@ describe('MeimaobingAccount', () => {
       )
     ).resolves.toBeUndefined();
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('still requires login for the same-origin gateway when an API key is stored', async () => {
+    await expect(
+      ensureMeimaobingImageRouteReady(
+        {
+          profileId: 'meimaobing-account',
+          apiKey: 'sk-user',
+          baseUrl: '/meimaobing/v1',
+        },
+        {
+          refresh: async () => ({
+            status: 'signed-out',
+            authenticated: false,
+            account: null,
+            wallet: null,
+            topUpUrl: null,
+            errorCode: 'SIGN_IN_REQUIRED',
+          }),
+        }
+      )
+    ).rejects.toMatchObject({
+      code: 'SIGN_IN_REQUIRED',
+    });
   });
 
   it('requires login for a cookie-session Meimaobing route', async () => {
