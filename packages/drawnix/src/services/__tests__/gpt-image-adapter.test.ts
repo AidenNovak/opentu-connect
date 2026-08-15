@@ -1,3 +1,4 @@
+import { Blob as NodeBlob } from 'node:buffer';
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildGPTImageEditFormData,
@@ -193,7 +194,13 @@ describe('gpt-image-adapter', () => {
     const fetcher = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
       const type = url.endsWith('.webp') ? 'image/webp' : 'image/png';
-      return new Response(new Blob(['ok'], { type }), { status: 200 });
+      const blob = new NodeBlob(['ok'], { type });
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        blob: async () => blob as unknown as Blob,
+      } as Response;
     });
 
     const body = await buildGPTImageEditFormData(
