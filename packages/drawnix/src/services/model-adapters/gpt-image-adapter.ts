@@ -212,6 +212,21 @@ function getBlobExtension(blob: Blob, source: string): string {
   return mimeExtension === 'bin' ? 'png' : mimeExtension;
 }
 
+function isPageBlob(value: Blob): boolean {
+  return value instanceof Blob;
+}
+
+async function toPageBlob(blob: Blob): Promise<Blob> {
+  if (isPageBlob(blob)) {
+    return blob;
+  }
+
+  const buffer = await blob.arrayBuffer();
+  return new Blob([buffer], {
+    type: blob.type || 'application/octet-stream',
+  });
+}
+
 async function imageInputToBlob(
   value: string,
   filenamePrefix: string,
@@ -234,7 +249,7 @@ async function imageInputToBlob(
     );
   }
 
-  const blob = await response.blob();
+  const blob = await toPageBlob(await response.blob());
   return {
     blob,
     filename: `${filenamePrefix}.${getBlobExtension(blob, normalized)}`,
