@@ -4,6 +4,7 @@ import {
   getCompatibleParams,
   getStaticModelsByType,
   getSizeOptionsForModel,
+  getDefaultSizeForModel,
   getStaticModelConfig,
   ModelVendor,
   setRuntimeModelConfigs,
@@ -35,6 +36,16 @@ describe('model-config image size options', () => {
     expect(
       getSizeOptionsForModel('gpt-image-2-vip').map((option) => option.value)
     ).toEqual(expected);
+  });
+
+  it('托管画布默认写出 1x1，而不是省略 size 的 auto', () => {
+    expect(getDefaultSizeForModel('gpt-image-2')).toBe('1x1');
+    expect(getDefaultSizeForModel('gpt-image-2-vip')).toBe('1x1');
+    expect(getDefaultSizeForModel('gemini-3-pro-image-preview')).toBe('1x1');
+    expect(
+      getCompatibleParams('gpt-image-2').find((param) => param.id === 'size')
+        ?.defaultValue
+    ).toBe('1x1');
   });
 
   it('为 gpt-image-2 暴露分辨率和官方画质参数', () => {

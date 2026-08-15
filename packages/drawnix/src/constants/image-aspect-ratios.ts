@@ -55,9 +55,9 @@ export const ASPECT_RATIO_OPTIONS: AspectRatioOption[] = [
 ];
 
 /**
- * 默认宽高比（自动）
+ * 默认宽高比。托管画布必须写出像素 size，auto 会让 Broker 退回 4K 预扣。
  */
-export const DEFAULT_ASPECT_RATIO = 'auto';
+export const DEFAULT_ASPECT_RATIO = '1:1';
 
 /**
  * 根据宽高比值获取配置
