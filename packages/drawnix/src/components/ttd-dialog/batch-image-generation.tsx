@@ -329,7 +329,7 @@ function getDefaultTasks(): TaskRow[] {
     initialTasks.push({
       id: i + 1,
       prompt: '',
-      params: { size: 'auto' },
+      params: { size: '1x1' },
       images: [],
       count: 1,
       taskIds: [],

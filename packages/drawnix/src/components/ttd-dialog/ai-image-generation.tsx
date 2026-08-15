@@ -111,7 +111,7 @@ interface AIImageGenerationProps {
 
 function getAspectRatioFromSizeParam(size?: string): string | undefined {
   if (!size) return undefined;
-  if (size === 'auto') return DEFAULT_ASPECT_RATIO;
+  if (size === 'auto') return 'auto';
 
   const aspectRatio = size.replace(/[xX]/g, ':');
   return ASPECT_RATIO_OPTIONS.some((option) => option.value === aspectRatio)
@@ -140,7 +140,7 @@ function applyAspectRatioToParams(
   }
 
   const nextSize =
-    nextAspectRatio === DEFAULT_ASPECT_RATIO
+    nextAspectRatio === 'auto'
       ? 'auto'
       : convertAspectRatioToSize(nextAspectRatio);
   if (

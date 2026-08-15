@@ -4,7 +4,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 describe('ai-generation-preferences-service', () => {
   beforeEach(() => {
     vi.resetModules();
-    localStorage.clear();
+    if (typeof localStorage.clear === 'function') {
+      localStorage.clear();
+      return;
+    }
+
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        store.set(key, String(value));
+      },
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      clear: () => {
+        store.clear();
+      },
+      key: (index: number) => [...store.keys()][index] ?? null,
+      get length() {
+        return store.size;
+      },
+    });
   });
 
   it('兼容旧 text 偏好并恢复为 agent 模式', async () => {
@@ -235,6 +256,69 @@ describe('ai-generation-preferences-service', () => {
       size: '16x9',
       resolution: '2k',
       quality: 'medium',
+    });
+  });
+
+  it('图片工具默认比例为 1:1，并把旧的 size=auto 迁成 1x1', async () => {
+    const {
+      loadScopedAIImageToolPreferences,
+      sanitizeImageToolExtraParams,
+    } = await import('../ai-generation-preferences-service');
+
+    expect(
+      sanitizeImageToolExtraParams('gpt-image-2', { size: 'auto' })
+    ).toMatchObject({
+      size: '1x1',
+    });
+    expect(
+      loadScopedAIImageToolPreferences('gpt-image-2', 'provider-a::gpt-image-2')
+    ).toMatchObject({
+      extraParams: {
+        size: '1x1',
+        resolution: '1k',
+        quality: 'auto',
+      },
+      aspectRatio: '1:1',
+    });
+
+    localStorage.setItem(
+      'aitu_ai_image_tool_preferences',
+      JSON.stringify({
+        value: {
+          currentModel: 'gpt-image-2',
+          currentSelectionKey: 'provider-a::gpt-image-2',
+          extraParams: {
+            size: 'auto',
+            resolution: '1k',
+            quality: 'auto',
+          },
+          aspectRatio: 'auto',
+          scopedPreferences: {
+            'provider-a::gpt-image-2': {
+              modelId: 'gpt-image-2',
+              selectionKey: 'provider-a::gpt-image-2',
+              extraParams: {
+                size: 'auto',
+                resolution: '1k',
+                quality: 'auto',
+              },
+              aspectRatio: 'auto',
+            },
+          },
+        },
+        updatedAt: Date.now(),
+      })
+    );
+
+    expect(
+      loadScopedAIImageToolPreferences('gpt-image-2', 'provider-a::gpt-image-2')
+    ).toMatchObject({
+      extraParams: {
+        size: '1x1',
+        resolution: '1k',
+        quality: 'auto',
+      },
+      aspectRatio: '1:1',
     });
   });
 
