@@ -3,7 +3,7 @@
 Run this process separately from the Vite frontend:
 
 ```bash
-node tools/newapi-image-bridge/server.mjs
+node tools/meimaobing-image-gateway/server.mjs
 ```
 
 Configure it with the variables in `.env.example`. Put the static app and this

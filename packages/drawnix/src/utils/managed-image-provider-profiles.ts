@@ -7,7 +7,6 @@ import type {
 
 export const TOKENHUB_IMAGE_PROVIDER_PROFILE_ID = 'tokenhub-images';
 export const MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID = 'meimaobing-account';
-export const LEGACY_NEWAPI_IMAGE_PROVIDER_PROFILE_ID = 'newapi-images';
 export const TOKENHUB_IMAGE_PROVIDER_BASE_URL =
   'https://api.sg.aidenovak.com/v1';
 export const MEIMAOBING_IMAGE_GATEWAY_API_PATH = '/meimaobing/v1';
@@ -103,7 +102,6 @@ export function normalizeManagedImageProviderProfileId(
 ): string | null | undefined {
   if (
     profileId === MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID ||
-    profileId === LEGACY_NEWAPI_IMAGE_PROVIDER_PROFILE_ID ||
     profileId === TOKENHUB_IMAGE_PROVIDER_PROFILE_ID
   ) {
     return MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID;
@@ -160,18 +158,6 @@ export function createMeimaobingAccountProviderProfile(
     capabilities: { ...IMAGE_ONLY_CAPABILITIES },
   };
 }
-
-// Retain this symbol for integrations built against the short-lived bridge.
-// Persisted `newapi-images` settings are migrated separately; code importing
-// the old symbol now selects the canonical Meimaobing account profile.
-export const NEWAPI_IMAGE_PROVIDER_PROFILE_ID =
-  MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID;
-export const NEWAPI_IMAGE_MODELS = MEIMAOBING_ACCOUNT_IMAGE_MODELS;
-export const createNewApiImageProviderProfile =
-  createMeimaobingAccountProviderProfile;
-export const getConfiguredNewApiImageBridgeUrl =
-  getConfiguredMeimaobingImageGatewayUrl;
-export const isNewApiImageBridgeProfileId = isMeimaobingAccountProfileId;
 
 function mergeKnownModels(
   existing: ModelConfig[] | undefined,

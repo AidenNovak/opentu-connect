@@ -1368,16 +1368,12 @@ export function createMeimaobingImageGateway(options = {}) {
   });
 }
 
-export const createNewApiImageBridge = createMeimaobingImageGateway;
-
 export function startMeimaobingImageGateway(options = {}) {
   const config = options.config || readGatewayConfig();
   const server = createMeimaobingImageGateway({ ...options, config });
   server.listen(config.port);
   return server;
 }
-
-export const startNewApiImageBridge = startMeimaobingImageGateway;
 
 if (
   process.argv[1] &&

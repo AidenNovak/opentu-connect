@@ -45,8 +45,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: node --test tools/newapi-image-bridge/server-subject.test.mjs
-      - run: bash tools/newapi-image-bridge/deploy/verify-beta.test.sh
+      - run: node --test tools/meimaobing-image-gateway/server-subject.test.mjs
+      - run: bash tools/meimaobing-image-gateway/deploy/verify-beta.test.sh
 
   ci:
     name: CI
