@@ -22,7 +22,7 @@
 
 - [x] 4.1 Keep Compose on loopback plus `meimaobing-beta-internal`, digest-pinned image, and read-only container.
 - [x] 4.2 Keep Nginx same-origin locations for auth, account, and `/meimaobing/v1/`.
-- [x] 4.3 Verify Store profile, issuer, principal-secret match, and feature-gate agreement in `deploy/verify-beta.sh`.
+- [x] 4.3 Verify HTTPS origins, Store profile name, principal-secret match, and feature-gate agreement in `deploy/verify-beta.sh`. Do not pin a test public hostname.
 - [x] 4.4 Add subject/bearer unit tests and the verifier test; run both in fork CI.
 
 ## 5. Spec
