@@ -299,21 +299,21 @@ export const MODEL_TYPE_COLORS = {
 
 /** 图片模型通用默认参数 */
 const IMAGE_DEFAULT_PARAMS: ImageModelDefaults = {
-  aspectRatio: 'auto',
+  aspectRatio: '1:1',
   width: 1024,
   height: 1024,
 };
 
 /** 2K 图片模型默认参数 */
 const IMAGE_2K_DEFAULT_PARAMS: ImageModelDefaults = {
-  aspectRatio: 'auto',
+  aspectRatio: '1:1',
   width: 2048,
   height: 2048,
 };
 
 /** 4K 图片模型默认参数 */
 const IMAGE_4K_DEFAULT_PARAMS: ImageModelDefaults = {
-  aspectRatio: 'auto',
+  aspectRatio: '1:1',
   width: 4096,
   height: 4096,
 };
@@ -2494,7 +2494,7 @@ export const AUDIO_PARAMS: ParamConfig[] = [
 /**
  * 图片参数配置
  * 根据 API 文档，size 使用宽高比格式（如 16x9），API 会自动转换为对应像素
- * 'auto' 表示不传尺寸参数，让模型自动决定
+ * 'auto' 表示不传尺寸参数，让模型自动决定。默认 1x1，避免托管预扣落到 4K 天花板。
  */
 export const IMAGE_PARAMS: ParamConfig[] = [
   // GPT Image 2 模型尺寸
@@ -2517,7 +2517,7 @@ export const IMAGE_PARAMS: ParamConfig[] = [
       { value: '16x9', label: '16:9 横版' },
       { value: '21x9', label: '21:9 超宽' },
     ],
-    defaultValue: 'auto',
+    defaultValue: '1x1',
     compatibleModels: GPT_IMAGE_2_MODEL_IDS,
     modelType: 'image',
   },
@@ -2574,7 +2574,7 @@ export const IMAGE_PARAMS: ParamConfig[] = [
       { value: '4x5', label: '4:5 竖版' },
       { value: '21x9', label: '21:9 超宽' },
     ],
-    defaultValue: 'auto',
+    defaultValue: '1x1',
     compatibleModels: GEMINI_IMAGE_MODEL_IDS_EXCLUDING_FLASH31,
     modelType: 'image',
   },
@@ -2602,7 +2602,7 @@ export const IMAGE_PARAMS: ParamConfig[] = [
       { value: '4x5', label: '4:5 竖版' },
       { value: '21x9', label: '21:9 超宽' },
     ],
-    defaultValue: 'auto',
+    defaultValue: '1x1',
     compatibleModels: GEMINI_31_FLASH_IMAGE_MODEL_IDS,
     modelType: 'image',
   },
@@ -2933,5 +2933,5 @@ export function getSizeOptionsForModel(
 export function getDefaultSizeForModel(modelId: string): string {
   const params = getCompatibleParams(modelId);
   const sizeParam = params.find((p) => p.id === 'size');
-  return sizeParam?.defaultValue || 'auto';
+  return sizeParam?.defaultValue || '1x1';
 }

@@ -209,9 +209,9 @@ function sanitizeSelectedParams(
     options?.keepDefaultSize !== false
   ) {
     const persistedSize = persistedParams.size;
-    const isValidPersistedSize = sizeParam.options?.some(
-      (option) => option.value === persistedSize
-    );
+    const isValidPersistedSize =
+      persistedSize !== 'auto' &&
+      sizeParam.options?.some((option) => option.value === persistedSize);
     nextParams.size = isValidPersistedSize
       ? persistedSize
       : getDefaultSizeForModel(modelId);
@@ -501,7 +501,7 @@ function sizeParamToAspectRatio(size: unknown): string | undefined {
   }
 
   if (size === 'auto') {
-    return DEFAULT_ASPECT_RATIO;
+    return 'auto';
   }
 
   const normalized = size.trim().replace(/[xX]/g, ':');

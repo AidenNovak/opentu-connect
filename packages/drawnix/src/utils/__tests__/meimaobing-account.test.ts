@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createMeimaobingAccount,
+  ensureMeimaobingImageRouteReady,
   getMeimaobingGatewayPaths,
+  getMissingInvocationCredentialsError,
   requireMeimaobingImageAccount,
   type MeimaobingGatewayPaths,
 } from '../meimaobing-account';
@@ -136,5 +138,109 @@ describe('MeimaobingAccount', () => {
     expect(
       getMeimaobingGatewayPaths('https://api.example.test/meimaobing/v1')
     ).toBeNull();
+  });
+
+  it('rejects a cookie-less custom Meimaobing URL without an API key', async () => {
+    await expect(
+      ensureMeimaobingImageRouteReady({
+        profileId: 'meimaobing-account',
+        apiKey: '',
+        baseUrl: 'https://custom.example.test/v1',
+      })
+    ).rejects.toMatchObject({
+      code: 'ACCOUNT_UNAVAILABLE',
+    });
+  });
+
+  it('skips login when a custom Meimaobing URL already has an API key', async () => {
+    const refresh = vi.fn(async () => ({
+      status: 'signed-out' as const,
+      authenticated: false,
+      account: null,
+      wallet: null,
+      topUpUrl: null,
+      errorCode: 'SIGN_IN_REQUIRED' as const,
+    }));
+
+    await expect(
+      ensureMeimaobingImageRouteReady(
+        {
+          profileId: 'meimaobing-account',
+          apiKey: 'sk-user',
+          baseUrl: 'https://custom.example.test/v1',
+        },
+        { refresh }
+      )
+    ).resolves.toBeUndefined();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('still requires login for the same-origin gateway when an API key is stored', async () => {
+    await expect(
+      ensureMeimaobingImageRouteReady(
+        {
+          profileId: 'meimaobing-account',
+          apiKey: 'sk-user',
+          baseUrl: '/meimaobing/v1',
+        },
+        {
+          refresh: async () => ({
+            status: 'signed-out',
+            authenticated: false,
+            account: null,
+            wallet: null,
+            topUpUrl: null,
+            errorCode: 'SIGN_IN_REQUIRED',
+          }),
+        }
+      )
+    ).rejects.toMatchObject({
+      code: 'SIGN_IN_REQUIRED',
+    });
+  });
+
+  it('requires login for a cookie-session Meimaobing route', async () => {
+    await expect(
+      ensureMeimaobingImageRouteReady(
+        {
+          profileId: 'meimaobing-account',
+          apiKey: '',
+          baseUrl: '/meimaobing/v1',
+        },
+        {
+          refresh: async () => ({
+            status: 'signed-out',
+            authenticated: false,
+            account: null,
+            wallet: null,
+            topUpUrl: null,
+            errorCode: 'SIGN_IN_REQUIRED',
+          }),
+        }
+      )
+    ).rejects.toMatchObject({
+      code: 'SIGN_IN_REQUIRED',
+    });
+  });
+
+  it('describes a Meimaobing credential gap without calling it a missing API key', () => {
+    expect(
+      getMissingInvocationCredentialsError({
+        profileId: 'meimaobing-account',
+        baseUrl: '/meimaobing/v1',
+      })
+    ).toEqual({
+      code: 'MEIMAOBING_ACCOUNT_NOT_READY',
+      message: '请先在设置中登录 Meimaobing 账户',
+    });
+    expect(
+      getMissingInvocationCredentialsError({
+        profileId: 'legacy-default',
+        baseUrl: 'https://api.tu-zi.com/v1',
+      })
+    ).toEqual({
+      code: 'NO_API_KEY',
+      message: '未配置 API Key',
+    });
   });
 });

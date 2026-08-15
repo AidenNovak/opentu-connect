@@ -57,6 +57,7 @@ import {
   isMeimaobingAccountProfileId,
   getConfiguredMeimaobingImageGatewayUrl,
   resolveMeimaobingAccountBaseUrl,
+  usesMeimaobingCookieSession,
 } from '../../utils/managed-image-provider-profiles';
 import {
   meimaobingAccount,
@@ -1272,7 +1273,8 @@ export const SettingsDialog = ({
     (selectedProfileUsesMeimaobingAccount
       ? canManageMeimaobingModels(
           meimaobingAccountSnapshot,
-          selectedProfile.apiKey
+          selectedProfile.apiKey,
+          selectedProfile.baseUrl
         )
       : !!selectedProfile.apiKey.trim());
   const currentDraftSignature = createSettingsDraftSignature({
@@ -2290,9 +2292,14 @@ export const SettingsDialog = ({
     const selectedBaseUrl = selectedProfile.baseUrl.trim();
     if (usesMeimaobingAccount && !canManageMeimaobingModels(
       meimaobingAccountSnapshot,
-      trimmedApiKey
+      trimmedApiKey,
+      selectedBaseUrl
     )) {
-      MessagePlugin.warning('请先登录 Meimaobing 账户，或自行填写 API Key');
+      MessagePlugin.warning(
+        usesMeimaobingCookieSession(selectedProfile.id, selectedBaseUrl)
+          ? '请先登录 Meimaobing 账户'
+          : '请先登录 Meimaobing 账户，或自行填写 API Key'
+      );
       return;
     }
     const normalizedBaseUrl = normalizeModelApiBaseUrl(
@@ -3762,7 +3769,7 @@ export const SettingsDialog = ({
               </div>
               {selectedProfileUsesMeimaobingAccount ? (
                 <span className="settings-dialog__field-hint">
-                  默认同域登录，无需填写。也可自行填写 API Key。
+                  默认同域登录，无需填写。自定义 API 地址时才使用 API Key。
                 </span>
               ) : null}
             </div>
@@ -3839,7 +3846,8 @@ export const SettingsDialog = ({
       (selectedProfileUsesMeimaobingAccount
         ? canManageMeimaobingModels(
             meimaobingAccountSnapshot,
-            selectedProfile.apiKey
+            selectedProfile.apiKey,
+            selectedProfile.baseUrl
           )
         : !!selectedProfile.apiKey.trim()) &&
       providerDraftState === 'saved' &&
@@ -4492,7 +4500,8 @@ export const SettingsDialog = ({
             {selectedProfileUsesMeimaobingAccount
               ? getMeimaobingSettingsModelEmptyHint(
                   meimaobingAccountSnapshot,
-                  Boolean(selectedProfile?.apiKey.trim())
+                  Boolean(selectedProfile?.apiKey.trim()),
+                  selectedProfile?.baseUrl
                 )
               : '填写 API Key 后即可获取模型，获取完成后可在这里检索和浏览。'}
           </div>

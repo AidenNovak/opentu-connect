@@ -1,6 +1,8 @@
 import {
   getConfiguredMeimaobingImageGatewayUrl,
+  isMeimaobingAccountProfileId,
   MEIMAOBING_IMAGE_GATEWAY_API_PATH,
+  usesMeimaobingCookieSession,
 } from './managed-image-provider-profiles';
 
 export type MeimaobingAccountStatus =
@@ -460,4 +462,47 @@ export async function requireMeimaobingImageAccount(
     return snapshot;
   }
   throw getMeimaobingAccountReadinessError(snapshot);
+}
+
+export async function ensureMeimaobingImageRouteReady(
+  route: {
+    profileId?: string | null;
+    apiKey?: string | null;
+    baseUrl?: string | null;
+  },
+  account: Pick<MeimaobingAccount, 'refresh'> = meimaobingAccount
+): Promise<void> {
+  if (!isMeimaobingAccountProfileId(route.profileId)) {
+    return;
+  }
+  if (usesMeimaobingCookieSession(route.profileId, route.baseUrl)) {
+    await requireMeimaobingImageAccount(account);
+    return;
+  }
+  if (route.apiKey?.trim()) {
+    return;
+  }
+  const trimmedBaseUrl = route.baseUrl?.trim() || '';
+  if (
+    !getMeimaobingGatewayPaths(trimmedBaseUrl) &&
+    /^https?:\/\//i.test(trimmedBaseUrl)
+  ) {
+    throw new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE');
+  }
+  await requireMeimaobingImageAccount(account);
+}
+
+export function getMissingInvocationCredentialsError(route: {
+  profileId?: string | null;
+  baseUrl?: string | null;
+}): { code: string; message: string } {
+  if (isMeimaobingAccountProfileId(route.profileId)) {
+    return {
+      code: 'MEIMAOBING_ACCOUNT_NOT_READY',
+      message: route.baseUrl
+        ? '请先在设置中登录 Meimaobing 账户'
+        : '请先在设置中启用 Meimaobing 图片账户',
+    };
+  }
+  return { code: 'NO_API_KEY', message: '未配置 API Key' };
 }

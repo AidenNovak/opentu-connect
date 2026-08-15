@@ -5,6 +5,7 @@ import {
   SaveFileIcon,
   TrashIcon,
   GithubIcon,
+  MeimaobingAccountIcon,
   BackupRestoreIcon,
   DebugLogIcon,
   BookOpenIcon,
@@ -35,6 +36,7 @@ import Menu from '../../menu/menu';
 import { useContext, useState, useCallback } from 'react';
 import { MenuContentPropsContext } from '../../menu/common';
 import { EVENT } from '../../../constants';
+import { openMeimaobingAccountSettings } from '../../../utils/provider-settings-navigation';
 
 export const SaveToFile = () => {
   const board = useBoard();
@@ -243,6 +245,24 @@ export const Settings = () => {
   );
 };
 Settings.displayName = 'Settings';
+
+export const MeimaobingAccount = () => {
+  const { t } = useI18n();
+  const { setAppState } = useDrawnix();
+  return (
+    <MenuItem
+      icon={<MeimaobingAccountIcon />}
+      data-track="toolbar_click_menu_meimaobing_account"
+      onSelect={() => {
+        openMeimaobingAccountSettings(setAppState);
+      }}
+      aria-label={t('menu.meimaobing')}
+    >
+      {t('menu.meimaobing')}
+    </MenuItem>
+  );
+};
+MeimaobingAccount.displayName = 'MeimaobingAccount';
 
 export const GitHubLink = () => {
   const { t } = useI18n();

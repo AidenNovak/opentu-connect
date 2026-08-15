@@ -1,6 +1,7 @@
 import { LogIn, LogOut, RefreshCw, WalletCards } from 'lucide-react';
 import { HoverTip } from '../shared/hover';
 import type { MeimaobingAccountSnapshot } from '../../utils/meimaobing-account';
+import { usesMeimaobingCookieSession } from '../../utils/managed-image-provider-profiles';
 
 export function formatMicrousd(value: number | null | undefined): string {
   if (typeof value !== 'number') return '余额暂不可用';
@@ -25,22 +26,30 @@ export function getMeimaobingAccountStatusLabel(
 
 export function canManageMeimaobingModels(
   snapshot: Pick<MeimaobingAccountSnapshot, 'authenticated'>,
-  apiKey: string
+  apiKey: string,
+  baseUrl?: string | null
 ): boolean {
-  return snapshot.authenticated || Boolean(apiKey.trim());
+  if (snapshot.authenticated) {
+    return true;
+  }
+  return (
+    Boolean(apiKey.trim()) &&
+    !usesMeimaobingCookieSession('meimaobing-account', baseUrl)
+  );
 }
 
 export function getMeimaobingSettingsModelEmptyHint(
   snapshot: MeimaobingAccountSnapshot,
-  hasApiKey: boolean
+  hasApiKey: boolean,
+  baseUrl?: string | null
 ): string {
-  if (hasApiKey || snapshot.authenticated) {
+  if (canManageMeimaobingModels(snapshot, hasApiKey ? 'present' : '', baseUrl)) {
     return '还没有已添加的模型';
   }
   if (snapshot.status === 'unavailable') {
     return 'Meimaobing 账户服务暂不可用，请稍后重试。';
   }
-  return '默认同域登录后即可获取图片模型，也可自行填写 API Key。';
+  return '默认同域登录后即可获取图片模型。自定义 API 地址时才使用填写的 API Key。';
 }
 
 interface MeimaobingAccountCardProps {

@@ -33,7 +33,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - run: pnpm --dir packages/drawnix exec vitest run src/utils/__tests__/meimaobing-account.test.ts src/utils/__tests__/managed-image-provider-profiles.test.ts src/utils/__tests__/settings-manager.test.ts src/utils/provider-settings-navigation.test.ts src/utils/gemini-api/auth.test.ts src/utils/__tests__/runtime-model-discovery.test.ts src/services/__tests__/meimaobing-same-origin-transport.test.ts src/services/__tests__/gpt-image-adapter.test.ts src/services/__tests__/image-generation-service.test.ts src/components/settings-dialog/meimaobing-account-card.test.tsx
+      - run: pnpm --dir packages/drawnix exec vitest run src/utils/__tests__/meimaobing-account.test.ts src/utils/__tests__/managed-image-provider-profiles.test.ts src/utils/__tests__/settings-manager.test.ts src/utils/provider-settings-navigation.test.ts src/utils/gemini-api/auth.test.ts src/utils/__tests__/runtime-model-discovery.test.ts src/services/__tests__/meimaobing-same-origin-transport.test.ts src/services/__tests__/gpt-image-adapter.test.ts src/services/__tests__/image-generation-service.test.ts src/components/settings-dialog/meimaobing-account-card.test.tsx src/services/task-invocation-route.test.ts src/constants/__tests__/model-config.test.ts src/services/__tests__/meimaobing-image-gateway.test.ts src/services/__tests__/ai-generation-preferences-service.test.ts
       - run: pnpm exec nx run-many -t=test --exclude=drawnix
 
   image-gateway:

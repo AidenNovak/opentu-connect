@@ -64,6 +64,7 @@ import {
   type ModelRef,
 } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
+import { ensureMeimaobingImageRouteReady } from '../../utils/meimaobing-account';
 import { buildMJPromptSuffix } from '../../utils/mj-params';
 import {
   getCompatibleParams,
@@ -110,7 +111,7 @@ interface AIImageGenerationProps {
 
 function getAspectRatioFromSizeParam(size?: string): string | undefined {
   if (!size) return undefined;
-  if (size === 'auto') return DEFAULT_ASPECT_RATIO;
+  if (size === 'auto') return 'auto';
 
   const aspectRatio = size.replace(/[xX]/g, ':');
   return ASPECT_RATIO_OPTIONS.some((option) => option.value === aspectRatio)
@@ -139,7 +140,7 @@ function applyAspectRatioToParams(
   }
 
   const nextSize =
-    nextAspectRatio === DEFAULT_ASPECT_RATIO
+    nextAspectRatio === 'auto'
       ? 'auto'
       : convertAspectRatioToSize(nextAspectRatio);
   if (
@@ -729,6 +730,21 @@ const AIImageGeneration = ({
           );
           return;
         }
+      }
+
+      try {
+        await ensureMeimaobingImageRouteReady(
+          resolveInvocationRoute('image', currentModelRef || currentModel)
+        );
+      } catch (error) {
+        setError(
+          error instanceof Error
+            ? error.message
+            : language === 'zh'
+            ? 'Meimaobing 账户服务暂不可用，请稍后重试'
+            : 'Meimaobing account is unavailable'
+        );
+        return;
       }
 
       if (isMJModel) {

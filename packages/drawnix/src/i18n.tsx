@@ -79,6 +79,7 @@ export interface Translations {
   'menu.exportImage.jpg': string;
   'menu.cleanBoard': string;
   'menu.github': string;
+  'menu.meimaobing': string;
   'menu.settings': string;
   'menu.backupRestore': string;
   'menu.cloudSync': string;
@@ -272,6 +273,7 @@ const translations: Record<Language, Translations> = {
     'menu.exportImage.jpg': 'JPG',
     'menu.cleanBoard': '清除画布',
     'menu.github': 'GitHub',
+    'menu.meimaobing': 'Meimaobing 账户',
     'menu.settings': '设置',
     'menu.backupRestore': '备份 / 恢复',
     'menu.cloudSync': '云端同步',
@@ -462,6 +464,7 @@ const translations: Record<Language, Translations> = {
     'menu.exportImage.jpg': 'JPG',
     'menu.cleanBoard': 'Clear Board',
     'menu.github': 'GitHub',
+    'menu.meimaobing': 'Meimaobing account',
     'menu.settings': 'Settings',
     'menu.backupRestore': 'Backup / Restore',
     'menu.cloudSync': 'Cloud Sync',

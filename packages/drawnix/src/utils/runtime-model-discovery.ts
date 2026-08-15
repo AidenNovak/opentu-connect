@@ -29,7 +29,10 @@ import {
   isSunoLikeModelId,
 } from './suno-model-aliases';
 import { sortModelsByDisplayPriority } from './model-sort';
-import { isMeimaobingAccountProfileId } from './managed-image-provider-profiles';
+import {
+  isMeimaobingAccountProfileId,
+  usesMeimaobingCookieSession,
+} from './managed-image-provider-profiles';
 import {
   getMeimaobingImageGatewayError,
   MeimaobingImageGatewayError,
@@ -959,7 +962,7 @@ function createManualModelConfig(input: ManualRuntimeModelInput): ModelConfig {
     tags: ['runtime', 'manual'],
     imageDefaults:
       input.type === 'image'
-        ? { aspectRatio: 'auto', width: 1024, height: 1024 }
+        ? { aspectRatio: '1:1', width: 1024, height: 1024 }
         : undefined,
     videoDefaults:
       input.type === 'video'
@@ -1128,7 +1131,7 @@ function buildFallbackConfig(model: RemoteModelListItem): ModelConfig {
         : ['runtime'],
     imageDefaults:
       type === 'image'
-        ? { aspectRatio: 'auto', width: 1024, height: 1024 }
+        ? { aspectRatio: '1:1', width: 1024, height: 1024 }
         : undefined,
     videoDefaults:
       type === 'video'
@@ -1169,7 +1172,7 @@ function adaptRuntimeModel(model: RemoteModelListItem): ModelConfig | null {
       imageDefaults:
         categoryType === 'image'
           ? staticConfig.imageDefaults || {
-              aspectRatio: 'auto',
+              aspectRatio: '1:1',
               width: 1024,
               height: 1024,
             }
@@ -1916,7 +1919,7 @@ class RuntimeModelDiscoveryStore {
       normalizedBaseUrl,
       trimmedApiKey,
       usesMeimaobingAccount ? [] : fallbackBaseUrls,
-      usesMeimaobingAccount && !trimmedApiKey
+      usesMeimaobingCookieSession(profileId, normalizedBaseUrl)
     );
 
     let parsed: unknown;

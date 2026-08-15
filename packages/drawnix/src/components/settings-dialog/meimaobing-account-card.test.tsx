@@ -51,15 +51,26 @@ describe('Meimaobing account settings helpers', () => {
     );
   });
 
-  it('treats login or a filled API key as enough to manage models', () => {
-    expect(canManageMeimaobingModels(signedOut, '')).toBe(false);
-    expect(canManageMeimaobingModels(signedOut, 'sk-user')).toBe(true);
-    expect(canManageMeimaobingModels(ready, '')).toBe(true);
+  it('treats login, or a custom-URL API key, as enough to manage models', () => {
+    expect(canManageMeimaobingModels(signedOut, '', '/meimaobing/v1')).toBe(
+      false
+    );
+    expect(
+      canManageMeimaobingModels(signedOut, 'sk-user', '/meimaobing/v1')
+    ).toBe(false);
+    expect(
+      canManageMeimaobingModels(
+        signedOut,
+        'sk-user',
+        'https://custom.example.test/v1'
+      )
+    ).toBe(true);
+    expect(canManageMeimaobingModels(ready, '', '/meimaobing/v1')).toBe(true);
   });
 
   it('asks for login before model discovery when the account is empty', () => {
     expect(getMeimaobingSettingsModelEmptyHint(signedOut, false)).toBe(
-      '默认同域登录后即可获取图片模型，也可自行填写 API Key。'
+      '默认同域登录后即可获取图片模型。自定义 API 地址时才使用填写的 API Key。'
     );
   });
 });

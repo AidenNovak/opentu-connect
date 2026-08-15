@@ -888,14 +888,12 @@ describe('runtime-model-discovery', () => {
 
     await runtimeModelDiscovery.discover(
       'meimaobing-account',
-      'https://app.example.test/meimaobing/v1',
+      '/meimaobing/v1',
       ''
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      'https://app.example.test/meimaobing/v1/models'
-    );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/meimaobing/v1/models');
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
       headers: undefined,
       credentials: 'include',
@@ -964,6 +962,68 @@ describe('runtime-model-discovery', () => {
     expect(fetchMock.mock.calls[0]?.[1]?.credentials).not.toBe('include');
   });
 
+  it('keeps Meimaobing same-origin discovery on cookies even when an API key is stored', async () => {
+    vi.doMock('../settings-manager', () => ({
+      LEGACY_DEFAULT_PROVIDER_PROFILE_ID: 'legacy-default',
+      providerCatalogsSettings: {
+        get: () => [],
+        addListener: () => {},
+        removeListener: () => {},
+        update: async () => {},
+      },
+      providerProfilesSettings: {
+        get: () => [
+          {
+            id: 'meimaobing-account',
+            name: 'Meimaobing 图片账户',
+            enabled: true,
+          },
+        ],
+        addListener: () => {},
+        removeListener: () => {},
+      },
+      invocationPresetsSettings: {
+        addListener: () => {},
+        removeListener: () => {},
+      },
+      settingsManager: {
+        getSetting: () => ({}),
+        addListener: () => {},
+        removeListener: () => {},
+      },
+    }));
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: 'gpt-image-2',
+                category: 'image',
+              },
+            ],
+          }),
+          { status: 200 }
+        )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { runtimeModelDiscovery } = await import(
+      '../runtime-model-discovery'
+    );
+
+    await runtimeModelDiscovery.discover(
+      'meimaobing-account',
+      '/meimaobing/v1',
+      'sk-user'
+    );
+
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      headers: undefined,
+      credentials: 'include',
+    });
+  });
+
   it('maps a malformed Meimaobing account model response to account unavailability', async () => {
     vi.doMock('../settings-manager', () => ({
       LEGACY_DEFAULT_PROVIDER_PROFILE_ID: 'legacy-default',
@@ -1006,7 +1066,7 @@ describe('runtime-model-discovery', () => {
     await expect(
       runtimeModelDiscovery.discover(
         'meimaobing-account',
-        'https://app.example.test/meimaobing/v1',
+        '/meimaobing/v1',
         ''
       )
     ).rejects.toMatchObject({

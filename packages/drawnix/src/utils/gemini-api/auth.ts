@@ -4,11 +4,13 @@
 
 import { GeminiConfig } from './types';
 import { geminiSettings } from '../settings-manager';
-import { isMeimaobingAccountProfileId } from '../managed-image-provider-profiles';
+import {
+  isMeimaobingAccountProfileId,
+  MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID,
+} from '../managed-image-provider-profiles';
 import {
   getMeimaobingGatewayPaths,
-  MeimaobingImageGatewayError,
-  requireMeimaobingImageAccount,
+  ensureMeimaobingImageRouteReady,
 } from '../meimaobing-account';
 
 function usesMeimaobingAccount(config: GeminiConfig): boolean {
@@ -161,13 +163,17 @@ export async function validateAndEnsureConfig(
   }
 
   if (usesMeimaobingAccount(config)) {
-    // The managed image route has no browser-held API key. Keep an accidental
-    // non-same-origin override from turning into an API-key prompt, then let
-    // the account endpoint supply the actionable signed-out/balance state.
-    if (!getMeimaobingGatewayPaths(config.baseUrl)) {
-      throw new MeimaobingImageGatewayError('ACCOUNT_UNAVAILABLE');
+    const apiKey =
+      config.apiKey?.trim() || config.provider?.apiKey?.trim() || '';
+    await ensureMeimaobingImageRouteReady({
+      profileId:
+        config.provider?.profileId || MEIMAOBING_ACCOUNT_PROVIDER_PROFILE_ID,
+      apiKey,
+      baseUrl: config.baseUrl,
+    });
+    if (apiKey) {
+      config.apiKey = apiKey;
     }
-    await requireMeimaobingImageAccount();
     return config;
   }
 
